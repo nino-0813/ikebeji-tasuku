@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #f6f5f1;
+  --color-surface: #ffffff;
+  --color-line: #e6e3db;
+  --color-line-strong: #d4d0c4;
+  --color-ink: #1c1917;
+  --color-ink-soft: #57534e;
+  --color-ink-mute: #8a8375;
+
+  --color-brand: #15803d;
+  --color-brand-soft: #eaf4ec;
+
+  --color-todo: #78716c;
+  --color-doing: #2563eb;
+  --color-waiting: #d97706;
+  --color-done: #15803d;
+  --color-alert: #dc2626;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  background: var(--color-canvas);
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------ 共通パーツ */
+
+@utility card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 0.75rem;
+}
+
+@utility field {
+  width: 100%;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-ink);
+}
+
+.field:focus {
+  outline: 2px solid color-mix(in oklab, var(--color-brand) 45%, transparent);
+  outline-offset: 1px;
+  border-color: var(--color-brand);
+}
+
+@utility label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  margin-bottom: 0.3rem;
+}
+
+/* ドラッグ中のカード */
+.dragging {
+  opacity: 0.35;
+}
+
+/* 数値を等幅に */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pop-in {
+  animation: pop-in 0.14s ease-out;
+}
