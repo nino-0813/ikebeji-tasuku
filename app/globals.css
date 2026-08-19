@@ -141,6 +141,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .sidebar-nav { display: contents; }
   .sidebar-link { min-height: 48px; flex-direction: column; justify-content: center; gap: 2px; padding: 3px; font-size: 10px; }
   .sidebar-link .nav-icon { width: 20px; height: 20px; }
+  .sidebar-link:nth-child(n+5) { display: none; }
   .mobile-quick-add { display: grid; grid-column: 5; grid-row: 1; width: 44px; height: 44px; place-items: center; align-self: center; justify-self: center; border-radius: 50%; background: var(--color-brand); color: white; }
   .mobile-quick-add .nav-icon { width: 22px; height: 22px; }
   .sidebar-spacer { display: none; }

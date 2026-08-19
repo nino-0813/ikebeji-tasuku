@@ -179,6 +179,60 @@ export async function addComment(taskId: string, authorId: string, body: string)
   return {};
 }
 
+// ---------------------------------------------------------------- Inbox
+
+export async function createInboxItem(title: string, createdBy?: string | null) {
+  if (!title.trim()) return { error: "メモを入力してください。" };
+  const { error } = await db.from("tm_inbox_items").insert({
+    title: title.trim(),
+    created_by: createdBy || null,
+  });
+  if (error) return { error: error.message };
+  refresh();
+  return {};
+}
+
+export async function deleteInboxItem(id: string) {
+  const { error } = await db.from("tm_inbox_items").delete().eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  return {};
+}
+
+// ---------------------------------------------------------------- サブタスク
+
+export async function addSubtask(taskId: string, title: string) {
+  if (!title.trim()) return { error: "サブタスクを入力してください。" };
+  const { data: last } = await db
+    .from("tm_subtasks")
+    .select("sort_order")
+    .eq("task_id", taskId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  const { error } = await db.from("tm_subtasks").insert({
+    task_id: taskId,
+    title: title.trim(),
+    sort_order: (last?.[0]?.sort_order ?? -1) + 1,
+  });
+  if (error) return { error: error.message };
+  refresh();
+  return {};
+}
+
+export async function toggleSubtask(id: string, done: boolean) {
+  const { error } = await db.from("tm_subtasks").update({ done }).eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  return {};
+}
+
+export async function deleteSubtask(id: string) {
+  const { error } = await db.from("tm_subtasks").delete().eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  return {};
+}
+
 // ---------------------------------------------------------------- 打ち合わせ
 
 export async function createMeeting(title: string, heldOn: string) {

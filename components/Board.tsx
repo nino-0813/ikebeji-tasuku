@@ -43,6 +43,8 @@ export function Board({ tasks, members }: { tasks: Task[]; members: Member[] }) 
 
   // サーバー側の更新を取り込む（ドラッグ中は上書きしない）
   useEffect(() => {
+    // props由来の最新データを、操作中でないローカルDnD状態へ同期する。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!dragging) setCols(group(tasks));
   }, [tasks, dragging]);
 

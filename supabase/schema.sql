@@ -85,6 +85,27 @@ create table if not exists tm_comments (
 );
 create index if not exists tm_comments_task_idx on tm_comments(task_id, created_at);
 
+-- ---------- Inbox / あとで整理するメモ ----------
+create table if not exists tm_inbox_items (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null,
+  detail     text,
+  created_by text references tm_members(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists tm_inbox_items_created_idx on tm_inbox_items(created_at desc);
+
+-- ---------- サブタスク ----------
+create table if not exists tm_subtasks (
+  id         uuid primary key default gen_random_uuid(),
+  task_id    uuid not null references tm_tasks(id) on delete cascade,
+  title      text not null,
+  done       boolean not null default false,
+  sort_order double precision not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists tm_subtasks_task_idx on tm_subtasks(task_id, sort_order, created_at);
+
 -- ---------- 自動更新 ----------
 create or replace function tm_touch_updated_at() returns trigger
 language plpgsql as $$
@@ -125,6 +146,8 @@ alter table tm_goal_logs enable row level security;
 alter table tm_meetings  enable row level security;
 alter table tm_tasks     enable row level security;
 alter table tm_comments  enable row level security;
+alter table tm_inbox_items enable row level security;
+alter table tm_subtasks enable row level security;
 
 -- ---------- メンバー登録 ----------
 insert into tm_members (id, name, color, sort_order) values

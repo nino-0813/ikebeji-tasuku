@@ -2,19 +2,21 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Comment, Goal, Member, Task } from "@/lib/types";
+import type { Comment, Goal, Member, Subtask, Task } from "@/lib/types";
 import { CATEGORIES, PRIORITIES, STATUSES } from "@/lib/types";
 import { addDaysISO, formatDateLong, todayISO } from "@/lib/format";
-import { addComment, createTask, deleteTask, updateTask } from "@/lib/actions";
+import { addComment, addSubtask, createTask, deleteInboxItem, deleteSubtask, deleteTask, toggleSubtask, updateTask } from "@/lib/actions";
 import { Avatar } from "./ui";
 
 export type NewTaskDefaults = {
+  title?: string;
   category?: Task["category"];
   owner_id?: string;
   status?: Task["status"];
   goal_id?: string | null;
   meeting_id?: string | null;
   due_date?: string;
+  inbox_id?: string;
 };
 
 type Ctx = {
@@ -116,7 +118,7 @@ function TaskDialog({
   const router = useRouter();
   const isNew = !task;
 
-  const [title, setTitle] = useState(task?.title ?? "");
+  const [title, setTitle] = useState(task?.title ?? defaults?.title ?? "");
   const [detail, setDetail] = useState(task?.detail ?? "");
   const [category, setCategory] = useState<Task["category"]>(
     task?.category ?? defaults?.category ?? "marketing",
@@ -170,6 +172,7 @@ function TaskDialog({
       setError(res.error);
       return;
     }
+    if (isNew && defaults?.inbox_id) await deleteInboxItem(defaults.inbox_id);
     router.refresh();
     onClose();
   }
@@ -354,6 +357,7 @@ function TaskDialog({
             />
           </div>
 
+          {!isNew && <SubtaskList taskId={task.id} />}
           {!isNew && <CommentThread taskId={task.id} members={members} me={me} />}
 
           {error && (
@@ -395,6 +399,65 @@ function TaskDialog({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SubtaskList({ taskId }: { taskId: string }) {
+  const [items, setItems] = useState<Subtask[] | null>(null);
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/tasks/${taskId}/subtasks`);
+    const data = await res.json();
+    setItems(data.subtasks ?? []);
+  }, [taskId]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/tasks/${taskId}/subtasks`)
+      .then((res) => res.json())
+      .then((data) => { if (alive) setItems(data.subtasks ?? []); })
+      .catch(() => { if (alive) setItems([]); });
+    return () => { alive = false; };
+  }, [taskId]);
+
+  async function add() {
+    if (!title.trim() || busy) return;
+    setBusy(true);
+    await addSubtask(taskId, title);
+    setTitle("");
+    await load();
+    setBusy(false);
+  }
+
+  const done = items?.filter((item) => item.done).length ?? 0;
+  return (
+    <div className="rounded-lg border border-line p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <p className="label mb-0">サブタスク</p>
+        {items && items.length > 0 && <span className="text-[11px] text-ink-mute">{done}/{items.length} 完了</span>}
+      </div>
+      <div className="space-y-1">
+        {items === null && <p className="text-xs text-ink-mute">読み込み中…</p>}
+        {items?.map((item) => (
+          <div key={item.id} className="group flex min-h-9 items-center gap-2 rounded px-1 hover:bg-stone-50">
+            <button
+              type="button"
+              onClick={async () => { await toggleSubtask(item.id, !item.done); await load(); }}
+              className={`grid size-5 place-items-center rounded border ${item.done ? "border-brand bg-brand text-white" : "border-line-strong bg-white"}`}
+              aria-label={item.done ? "未完了に戻す" : "完了にする"}
+            >{item.done ? "✓" : ""}</button>
+            <span className={`min-w-0 flex-1 text-sm ${item.done ? "text-ink-mute line-through" : "text-ink"}`}>{item.title}</span>
+            <button type="button" onClick={async () => { await deleteSubtask(item.id); await load(); }} className="px-2 text-xs text-ink-mute opacity-0 group-hover:opacity-100" aria-label="サブタスクを削除">削除</button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void add(); } }} placeholder="サブタスクを追加" />
+        <button type="button" disabled={!title.trim() || busy} onClick={add} className="shrink-0 rounded-lg border border-line-strong px-3 text-xs font-medium disabled:opacity-40">追加</button>
       </div>
     </div>
   );

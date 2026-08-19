@@ -69,6 +69,23 @@ export type Comment = {
   created_at: string;
 };
 
+export type InboxItem = {
+  id: string;
+  title: string;
+  detail: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type Subtask = {
+  id: string;
+  task_id: string;
+  title: string;
+  done: boolean;
+  sort_order: number;
+  created_at: string;
+};
+
 /** ステータスの表示定義。ボードの列順もこの順番。 */
 export const STATUSES: { key: Status; label: string; hint: string }[] = [
   { key: "todo", label: "未着手", hint: "やると決まった。まだ手をつけていない" },

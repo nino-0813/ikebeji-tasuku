@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { db } from "./supabase";
-import type { Comment, Goal, GoalLog, Meeting, Member, Task } from "./types";
+import type { Comment, Goal, GoalLog, InboxItem, Meeting, Member, Subtask, Task } from "./types";
 
 export const ME_COOKIE = "tm_me";
 
@@ -40,6 +40,23 @@ export async function getComments(taskId: string): Promise<Comment[]> {
     .from("tm_comments")
     .select("*")
     .eq("task_id", taskId)
+    .order("created_at");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getInboxItems(): Promise<InboxItem[]> {
+  const { data, error } = await db.from("tm_inbox_items").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getSubtasks(taskId: string): Promise<Subtask[]> {
+  const { data, error } = await db
+    .from("tm_subtasks")
+    .select("*")
+    .eq("task_id", taskId)
+    .order("sort_order")
     .order("created_at");
   if (error) throw error;
   return data ?? [];
