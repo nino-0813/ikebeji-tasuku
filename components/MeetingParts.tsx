@@ -72,13 +72,11 @@ export function MeetingNotes({ meeting }: { meeting: Meeting }) {
   const [notes, setNotes] = useState(meeting.notes ?? "");
   const [saved, setSaved] = useState<"idle" | "saving" | "saved">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const first = useRef(true);
+  const initial = useRef(meeting.notes ?? "");
 
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
+    // 何も打ち込んでいないうちは保存しない（開発時の二重実行で走らせないため）
+    if (notes === initial.current) return;
     setSaved("saving");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
