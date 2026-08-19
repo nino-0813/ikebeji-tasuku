@@ -9,10 +9,10 @@ import { useTaskUI } from "./TaskUI";
 import { Avatar } from "./ui";
 
 const LINKS = [
-  { href: "/", label: "ホーム" },
-  { href: "/board", label: "ボード" },
-  { href: "/meetings", label: "打ち合わせ" },
-  { href: "/goals", label: "目標" },
+  { href: "/", label: "ホーム", icon: "home" },
+  { href: "/board", label: "ボード", icon: "board" },
+  { href: "/meetings", label: "打ち合わせ", icon: "meeting" },
+  { href: "/goals", label: "目標", icon: "goal" },
 ];
 
 export function Nav({ members, me }: { members: Member[]; me: Member | null }) {
@@ -20,46 +20,63 @@ export function Nav({ members, me }: { members: Member[]; me: Member | null }) {
   const { openNew } = useTaskUI();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <span className="grid size-7 place-items-center rounded-lg bg-brand text-xs font-bold text-white">
-            イケ
-          </span>
-          <span className="hidden text-sm font-bold sm:inline">イケベジ 進行ボード</span>
+    <aside className="app-sidebar">
+      <a className="skip-link" href="#main-content">本文へ移動</a>
+      <div className="sidebar-inner">
+        <Link href="/" className="workspace-switcher">
+          <span className="workspace-mark">イ</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">イケベジ</span>
+          <Icon name="chevrons" />
         </Link>
 
-        <nav className="flex items-center gap-0.5 sm:ml-3">
+        <button
+          onClick={() => openNew()}
+          className="new-task-button"
+          title="キーボードの n でも開けます"
+        >
+          <Icon name="plus" />
+          <span>新しいタスク</span>
+          <kbd>N</kbd>
+        </button>
+
+        <nav className="sidebar-nav" aria-label="メインナビゲーション">
           {LINKS.map((l) => {
             const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
             return (
               <Link
                 key={l.href}
                 href={l.href}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition sm:text-[13px] ${
-                  active ? "bg-brand-soft text-brand" : "text-ink-soft hover:bg-stone-100"
+                className={`sidebar-link ${
+                  active ? "sidebar-link-active" : ""
                 }`}
+                aria-current={active ? "page" : undefined}
               >
+                <Icon name={l.icon} />
                 {l.label}
               </Link>
             );
           })}
         </nav>
-
-        <span className="grow" />
-
-        <button
-          onClick={() => openNew()}
-          className="rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:brightness-110"
-          title="キーボードの n でも開けます"
-        >
-          ＋ タスク
+        <button className="mobile-quick-add" onClick={() => openNew()} aria-label="新しいタスクを追加">
+          <Icon name="plus" />
         </button>
-
-        <MeSwitcher members={members} me={me} />
+        <div className="sidebar-spacer" />
+        <div className="sidebar-footer"><MeSwitcher members={members} me={me} /></div>
       </div>
-    </header>
+    </aside>
   );
+}
+
+function Icon({ name }: { name: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-7h6v7"/></>,
+    board: <><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="10" rx="1.5"/></>,
+    meeting: <><path d="M8 3v3M16 3v3"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 14h.01M12 14h.01M16 14h.01"/></>,
+    goal: <><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></>,
+    plus: <path d="M12 5v14M5 12h14"/>,
+    chevrons: <path d="m8 9 4-4 4 4M16 15l-4 4-4-4"/>,
+  };
+  return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
 function MeSwitcher({ members, me }: { members: Member[]; me: Member | null }) {
@@ -67,19 +84,21 @@ function MeSwitcher({ members, me }: { members: Member[]; me: Member | null }) {
   const [, start] = useTransition();
 
   return (
-    <div className="relative">
+    <div className="relative w-full">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-lg border border-line-strong bg-white px-2 py-1 text-xs text-ink-soft hover:bg-stone-50"
+        className="profile-button"
+        aria-expanded={open}
       >
         <Avatar member={me} size={20} />
-        <span className="hidden sm:inline">{me?.name ?? "自分を選ぶ"}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{me?.name ?? "自分を選ぶ"}</span>
+        <Icon name="chevrons" />
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="pop-in card absolute right-0 z-20 mt-1 w-44 py-1 shadow-lg">
+          <div className="profile-menu pop-in card absolute right-0 z-20 w-52 py-1 shadow-lg">
             <p className="px-3 py-1 text-[11px] text-ink-mute">自分は誰？</p>
             {members.map((m) => (
               <button

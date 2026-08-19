@@ -11,8 +11,12 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <TaskUIProvider members={members} goals={goals} me={me}>
-      <Nav members={members} me={me} />
-      <main className="mx-auto w-full max-w-7xl grow px-4 py-6">{children}</main>
+      <div className="app-shell">
+        <Nav members={members} me={me} />
+        <main id="main-content" className="app-main">
+          <div className="page-content">{children}</div>
+        </main>
+      </div>
     </TaskUIProvider>
   );
 }
