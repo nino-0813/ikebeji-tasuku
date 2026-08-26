@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "./supabase";
 import { ME_COOKIE } from "./data";
 import { AUTH_COOKIE, authToken } from "./auth";
-import type { Category, Priority, Status } from "./types";
+import type { Category, Horizon, Priority, Status } from "./types";
 
 function refresh() {
   revalidatePath("/", "layout");
@@ -57,6 +57,7 @@ export type TaskInput = {
   waiting_on?: string | null;
   goal_id?: string | null;
   meeting_id?: string | null;
+  project_id?: string | null;
 };
 
 /**
@@ -95,6 +96,7 @@ export async function createTask(input: TaskInput): Promise<{ error?: string; id
       waiting_on: input.waiting_on?.trim() || null,
       goal_id: input.goal_id || null,
       meeting_id: input.meeting_id || null,
+      project_id: input.project_id || null,
       sort_order,
     })
     .select("id")
@@ -118,6 +120,7 @@ export async function updateTask(
   if (typeof clean.detail === "string") clean.detail = clean.detail.trim() || null;
   if (typeof clean.waiting_on === "string") clean.waiting_on = clean.waiting_on.trim() || null;
   if (clean.goal_id === "") clean.goal_id = null;
+  if (clean.project_id === "") clean.project_id = null;
 
   const { error } = await db.from("tm_tasks").update(clean).eq("id", id);
   if (error) return { error: error.message };
@@ -260,11 +263,90 @@ export async function deleteMeeting(id: string) {
   return {};
 }
 
+// ---------------------------------------------------------------- プロジェクト
+
+export type ProjectInput = {
+  title: string;
+  detail?: string | null;
+  category: Category;
+  goal_id?: string | null;
+  color?: string;
+};
+
+export async function createProject(input: ProjectInput): Promise<{ error?: string; id?: string }> {
+  if (!input.title.trim()) return { error: "プロジェクト名を入れてください。" };
+
+  // 新規は一覧の先頭に積む
+  const { data: top } = await db
+    .from("tm_projects")
+    .select("sort_order")
+    .eq("archived", false)
+    .order("sort_order", { ascending: true })
+    .limit(1);
+  const sort_order = (top?.[0]?.sort_order ?? 0) - 1;
+
+  const { data, error } = await db
+    .from("tm_projects")
+    .insert({
+      title: input.title.trim(),
+      detail: input.detail?.trim() || null,
+      category: input.category,
+      goal_id: input.goal_id || null,
+      color: input.color || "#15803d",
+      sort_order,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  refresh();
+  return { id: data.id };
+}
+
+export async function updateProject(
+  id: string,
+  patch: Partial<ProjectInput> & { archived?: boolean },
+): Promise<{ error?: string }> {
+  if (patch.title !== undefined && !patch.title.trim())
+    return { error: "プロジェクト名は空にできません。" };
+
+  const clean: Record<string, unknown> = { ...patch };
+  if (typeof clean.title === "string") clean.title = clean.title.trim();
+  if (typeof clean.detail === "string") clean.detail = clean.detail.trim() || null;
+  if (clean.goal_id === "") clean.goal_id = null;
+
+  const { error } = await db.from("tm_projects").update(clean).eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  return {};
+}
+
+/**
+ * プロジェクトを削除する。中のタスクは残り、所属だけ外れる（DBの on delete set null）。
+ * 中身が全部終わっただけなら削除ではなく updateProject({ archived: true }) を使うこと。
+ */
+export async function deleteProject(id: string): Promise<{ error?: string }> {
+  const { error } = await db.from("tm_projects").delete().eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  return {};
+}
+
+/** 一覧の並べ替え */
+export async function reorderProjects(orderedIds: string[]): Promise<{ error?: string }> {
+  await Promise.all(
+    orderedIds.map((id, index) => db.from("tm_projects").update({ sort_order: index }).eq("id", id)),
+  );
+  refresh();
+  return {};
+}
+
 // ---------------------------------------------------------------- 目標 / KPI
 
 export type GoalInput = {
   title: string;
   category: Category;
+  horizon?: Horizon;
+  parent_goal_id?: string | null;
   unit: string;
   target_value: number;
   current_value: number;
@@ -279,6 +361,8 @@ export async function createGoal(input: GoalInput) {
   const { error } = await db.from("tm_goals").insert({
     ...input,
     title: input.title.trim(),
+    horizon: input.horizon ?? "long",
+    parent_goal_id: input.parent_goal_id || null,
     memo: input.memo?.trim() || null,
   });
   if (error) return { error: error.message };

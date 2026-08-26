@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { db } from "./supabase";
-import type { Comment, Goal, GoalLog, InboxItem, Meeting, Member, Subtask, Task } from "./types";
+import type { Comment, Goal, GoalLog, InboxItem, Meeting, Member, Project, Subtask, Task } from "./types";
 
 export const ME_COOKIE = "tm_me";
 
@@ -67,9 +67,39 @@ export async function getGoals(): Promise<Goal[]> {
     .from("tm_goals")
     .select("*")
     .eq("archived", false)
+    .order("horizon", { ascending: false })
     .order("deadline");
   if (error) throw error;
   return data ?? [];
+}
+
+/** 畳んでいないプロジェクト。並び順 → 作成順 */
+export async function getProjects(): Promise<Project[]> {
+  const { data, error } = await db
+    .from("tm_projects")
+    .select("*")
+    .eq("archived", false)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** 畳んだものも含めた全プロジェクト */
+export async function getAllProjects(): Promise<Project[]> {
+  const { data, error } = await db
+    .from("tm_projects")
+    .select("*")
+    .order("archived", { ascending: true })
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getProject(id: string): Promise<Project | null> {
+  const { data, error } = await db.from("tm_projects").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data;
 }
 
 export async function getGoalLogs(goalId: string): Promise<GoalLog[]> {

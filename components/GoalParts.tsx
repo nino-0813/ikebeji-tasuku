@@ -2,22 +2,36 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Category, Goal, GoalLog } from "@/lib/types";
+import type { Category, Goal, GoalLog, Horizon } from "@/lib/types";
 import { CATEGORIES } from "@/lib/types";
 import { addDaysISO, formatDate, formatValue, todayISO } from "@/lib/format";
 import { goalStats } from "@/lib/goal";
 import { addGoalLog, createGoal, deleteGoal, updateGoal } from "@/lib/actions";
 
-export function NewGoalButton() {
+export function NewGoalButton({
+  horizon = "long",
+  parentGoal,
+  longGoals = [],
+  label,
+}: {
+  horizon?: Horizon;
+  /** 短期目標をどの長期目標の下に作るか。渡されていれば固定される */
+  parentGoal?: Goal;
+  /** 親を選ばせたいときの候補 */
+  longGoals?: Goal[];
+  label?: string;
+}) {
   const router = useRouter();
+  const isShort = horizon === "short";
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<Category>("marketing");
-  const [unit, setUnit] = useState("円");
+  const [parentId, setParentId] = useState(parentGoal?.id ?? "");
+  const [category, setCategory] = useState<Category>(parentGoal?.category ?? "marketing");
+  const [unit, setUnit] = useState(parentGoal?.unit ?? "円");
   const [target, setTarget] = useState("");
   const [current, setCurrent] = useState("");
   const [start, setStart] = useState(todayISO());
-  const [deadline, setDeadline] = useState(addDaysISO(90));
+  const [deadline, setDeadline] = useState(addDaysISO(isShort ? 30 : 90));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -25,25 +39,49 @@ export function NewGoalButton() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:brightness-110"
+        className={
+          isShort
+            ? "rounded-lg border border-line-strong bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft transition hover:bg-stone-50"
+            : "rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:brightness-110"
+        }
       >
-        ＋ 目標を作る
+        {label ?? (isShort ? "＋ 区切りを足す" : "＋ 長期目標を作る")}
       </button>
     );
   }
 
   return (
     <div className="pop-in card w-full space-y-3 p-4">
+      <p className="text-[11px] font-bold text-ink-mute">
+        {isShort ? "短期目標（長期目標の中の区切り）" : "長期目標"}
+      </p>
+
       <div>
         <label className="label">目標（数字が入る言い方にする）</label>
         <input
           autoFocus
           className="field"
           value={title}
-          placeholder="例）お米の売上（オンラインストア＋定期便）"
+          placeholder={
+            isShort ? "例）9月末までに定期購入者60人" : "例）定期購入者の数（オンラインストア）"
+          }
           onChange={(e) => setTitle(e.target.value)}
         />
       </div>
+
+      {isShort && !parentGoal && longGoals.length > 0 && (
+        <div>
+          <label className="label">どの長期目標の区切りか</label>
+          <select className="field" value={parentId} onChange={(e) => setParentId(e.target.value)}>
+            <option value="">— 単体の短期目標にする —</option>
+            {longGoals.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-4">
         <div>
           <label className="label">領域</label>
@@ -124,6 +162,8 @@ export function NewGoalButton() {
               const res = await createGoal({
                 title,
                 category,
+                horizon,
+                parent_goal_id: parentId || null,
                 unit: unit || "円",
                 target_value: Number(target) || 0,
                 current_value: Number(current) || 0,

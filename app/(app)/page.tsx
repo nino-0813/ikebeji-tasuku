@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { getGoals, getMeetings, getMembers, getTasks } from "@/lib/data";
+import { getGoals, getMeetings, getMembers, getProjects, getTasks } from "@/lib/data";
 import { STALL_DAYS, type Task } from "@/lib/types";
 import { daysSince, daysUntil, formatDate, formatDateLong, isStalled, todayISO } from "@/lib/format";
 import { GoalStrip } from "@/components/GoalStrip";
-import { TaskCard, TaskRow } from "@/components/TaskCard";
-import { AddTaskButton } from "@/components/AddTaskButton";
-import { Avatar, EmptyState, SectionTitle } from "@/components/ui";
+import { TaskRow } from "@/components/TaskCard";
+import { ProjectAccordion, NewProjectButton } from "@/components/ProjectParts";
+import { EmptyState, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +17,11 @@ function byUrgency(a: Task, b: Task) {
 }
 
 export default async function DashboardPage() {
-  const [tasks, members, goals, meetings] = await Promise.all([
+  const [tasks, members, goals, projects, meetings] = await Promise.all([
     getTasks(),
     getMembers(),
     getGoals(),
+    getProjects(),
     getMeetings(),
   ]);
 
@@ -67,7 +68,10 @@ export default async function DashboardPage() {
       </section>
 
       <section>
-        <SectionTitle count={stuck.length} hint={`期限超過、または${STALL_DAYS}日以上ステータスが動いていないもの`}>
+        <SectionTitle
+          count={stuck.length}
+          hint={`期限超過、または${STALL_DAYS}日以上ステータスが動いていないもの`}
+        >
           ⚠️ 詰まっているもの
         </SectionTitle>
         {stuck.length === 0 ? (
@@ -82,38 +86,18 @@ export default async function DashboardPage() {
       </section>
 
       <section>
-        <SectionTitle hint="この3列が空に近いほど、案件は前に進んでいます">
-          いま誰にボールがあるか
-        </SectionTitle>
-        <div className="grid gap-3 md:grid-cols-3">
-          {members.map((m) => {
-            const mine = open.filter((t) => t.owner_id === m.id).sort(byUrgency);
-            const doing = mine.filter((t) => t.status === "doing").length;
-            const waiting = mine.filter((t) => t.status === "waiting").length;
-            return (
-              <div key={m.id} className="card flex flex-col p-3">
-                <div className="mb-3 flex items-center gap-2">
-                  <Avatar member={m} size={26} />
-                  <span className="text-sm font-bold">{m.name}</span>
-                  <span className="tnum text-[11px] text-ink-mute">
-                    進行中{doing}・待ち{waiting}
-                  </span>
-                  <span className="grow" />
-                  <AddTaskButton defaults={{ owner_id: m.id }} label="＋" title={`${m.name}にタスクを追加`} />
-                </div>
-                <div className="space-y-2">
-                  {mine.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-line-strong py-6 text-center text-xs text-ink-mute">
-                      手持ちなし
-                    </p>
-                  ) : (
-                    mine.map((t) => <TaskCard key={t.id} task={t} members={members} />)
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-sm font-bold tracking-wide text-ink">プロジェクト</h2>
+            <span className="tnum text-xs text-ink-mute">{projects.length}件</span>
+            <span className="text-xs text-ink-mute">
+              クリックすると中のタスクが開きます。完了したタスクは一覧から消えますが、プロジェクトは残ります
+            </span>
+          </div>
+          <span className="grow" />
+          <NewProjectButton goals={goals} />
         </div>
+        <ProjectAccordion projects={projects} tasks={tasks} members={members} goals={goals} />
       </section>
 
       <section>
@@ -151,7 +135,9 @@ export default async function DashboardPage() {
 function Stat({ label, value, tone }: { label: string; value: number; tone?: "brand" }) {
   return (
     <div className="text-center">
-      <p className={`tnum text-lg leading-none font-bold ${tone === "brand" ? "text-brand" : "text-ink"}`}>
+      <p
+        className={`tnum text-lg leading-none font-bold ${tone === "brand" ? "text-brand" : "text-ink"}`}
+      >
         {value}
       </p>
       <p className="mt-0.5 text-[11px] text-ink-mute">{label}</p>

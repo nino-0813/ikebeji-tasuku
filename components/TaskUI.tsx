@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Comment, Goal, Member, Subtask, Task } from "@/lib/types";
+import type { Comment, Goal, Member, Project, Subtask, Task } from "@/lib/types";
 import { CATEGORIES, PRIORITIES, STATUSES } from "@/lib/types";
 import { addDaysISO, formatDateLong, todayISO } from "@/lib/format";
 import { addComment, addSubtask, createTask, deleteInboxItem, deleteSubtask, deleteTask, toggleSubtask, updateTask } from "@/lib/actions";
@@ -14,6 +14,7 @@ export type NewTaskDefaults = {
   owner_id?: string;
   status?: Task["status"];
   goal_id?: string | null;
+  project_id?: string | null;
   meeting_id?: string | null;
   due_date?: string;
   inbox_id?: string;
@@ -24,6 +25,7 @@ type Ctx = {
   openTask: (task: Task) => void;
   members: Member[];
   goals: Goal[];
+  projects: Project[];
   me: Member | null;
 };
 
@@ -38,11 +40,13 @@ export function useTaskUI() {
 export function TaskUIProvider({
   members,
   goals,
+  projects,
   me,
   children,
 }: {
   members: Member[];
   goals: Goal[];
+  projects: Project[];
   me: Member | null;
   children: React.ReactNode;
 }) {
@@ -78,7 +82,10 @@ export function TaskUIProvider({
     return () => window.removeEventListener("keydown", onKey);
   }, [openNew]);
 
-  const value = useMemo(() => ({ openNew, openTask, members, goals, me }), [openNew, openTask, members, goals, me]);
+  const value = useMemo(
+    () => ({ openNew, openTask, members, goals, projects, me }),
+    [openNew, openTask, members, goals, projects, me],
+  );
 
   return (
     <TaskUIContext.Provider value={value}>
@@ -90,6 +97,7 @@ export function TaskUIProvider({
           defaults={creating ?? undefined}
           members={members}
           goals={goals}
+          projects={projects}
           me={me}
           onClose={close}
         />
@@ -105,6 +113,7 @@ function TaskDialog({
   defaults,
   members,
   goals,
+  projects,
   me,
   onClose,
 }: {
@@ -112,6 +121,7 @@ function TaskDialog({
   defaults?: NewTaskDefaults;
   members: Member[];
   goals: Goal[];
+  projects: Project[];
   me: Member | null;
   onClose: () => void;
 }) {
@@ -129,6 +139,7 @@ function TaskDialog({
   const [status, setStatus] = useState<Task["status"]>(task?.status ?? defaults?.status ?? "todo");
   const [waitingOn, setWaitingOn] = useState(task?.waiting_on ?? "");
   const [goalId, setGoalId] = useState(task?.goal_id ?? defaults?.goal_id ?? "");
+  const [projectId, setProjectId] = useState(task?.project_id ?? defaults?.project_id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -164,6 +175,7 @@ function TaskDialog({
       status,
       waiting_on: status === "waiting" ? waitingOn : null,
       goal_id: goalId || null,
+      project_id: projectId || null,
       meeting_id: task?.meeting_id ?? defaults?.meeting_id ?? null,
     };
     const res = isNew ? await createTask(payload) : await updateTask(task.id, payload);
@@ -330,6 +342,33 @@ function TaskDialog({
               <p className="mt-1 text-[11px] text-amber-700">
                 ここを書いておくと、次の打ち合わせで「誰に何を催促するか」が一目でわかります。
               </p>
+            </div>
+          )}
+
+          {projects.length > 0 && (
+            <div>
+              <label className="label">プロジェクト（どの塊の中の作業か）</label>
+              <select
+                className="field"
+                value={projectId}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setProjectId(next);
+                  // プロジェクトを選んだら、領域と目標もそれに合わせる
+                  const proj = projects.find((p) => p.id === next);
+                  if (proj) {
+                    setCategory(proj.category);
+                    if (proj.goal_id) setGoalId(proj.goal_id);
+                  }
+                }}
+              >
+                <option value="">— プロジェクト未設定 —</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 

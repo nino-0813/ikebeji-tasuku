@@ -1,6 +1,7 @@
 export type Category = "marketing" | "system";
 export type Status = "todo" | "doing" | "waiting" | "done";
 export type Priority = "high" | "mid" | "low";
+export type Horizon = "long" | "short";
 
 export type Member = {
   id: string;
@@ -21,6 +22,7 @@ export type Task = {
   waiting_on: string | null;
   goal_id: string | null;
   meeting_id: string | null;
+  project_id: string | null;
   sort_order: number;
   status_changed_at: string;
   done_at: string | null;
@@ -32,6 +34,9 @@ export type Goal = {
   id: string;
   title: string;
   category: Category;
+  horizon: Horizon;
+  /** 短期目標のとき、どの長期目標の区切りなのか */
+  parent_goal_id: string | null;
   unit: string;
   target_value: number;
   current_value: number;
@@ -39,6 +44,19 @@ export type Goal = {
   deadline: string;
   memo: string | null;
   archived: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Project = {
+  id: string;
+  title: string;
+  detail: string | null;
+  category: Category;
+  goal_id: string | null;
+  color: string;
+  archived: boolean;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 };
@@ -99,6 +117,11 @@ export const CATEGORIES: { key: Category; label: string; short: string }[] = [
   { key: "system", label: "システム", short: "システム" },
 ];
 
+export const HORIZONS: { key: Horizon; label: string; hint: string }[] = [
+  { key: "long", label: "長期目標", hint: "半年〜1年で到達したい数字。ここは動かさない" },
+  { key: "short", label: "短期目標", hint: "長期目標の中の区切り。今月・今四半期どこまで行けばいいか" },
+];
+
 export const PRIORITIES: { key: Priority; label: string }[] = [
   { key: "high", label: "高" },
   { key: "mid", label: "中" },
@@ -107,3 +130,15 @@ export const PRIORITIES: { key: Priority; label: string }[] = [
 
 /** 何日ステータスが動かなければ「止まっている」とみなすか */
 export const STALL_DAYS = 5;
+
+/** プロジェクトの色。一覧でどれがどれか一目で分かるようにするためのもの */
+export const PROJECT_COLORS = [
+  "#15803d",
+  "#2563eb",
+  "#d97706",
+  "#db2777",
+  "#7c3aed",
+  "#0891b2",
+  "#65a30d",
+  "#dc2626",
+];

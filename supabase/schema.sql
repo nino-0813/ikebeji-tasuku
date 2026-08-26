@@ -2,6 +2,8 @@
 -- イケベジ 進行ボード / スキーマ
 -- Supabase → SQL Editor に丸ごと貼り付けて Run してください。
 -- 何度流しても壊れません（作成済みならスキップされます）。
+--
+-- 階層:  目標（長期 → 短期） → プロジェクト → タスク → サブタスク
 -- ============================================================
 
 -- ---------- メンバー ----------
@@ -13,6 +15,8 @@ create table if not exists tm_members (
 );
 
 -- ---------- 目標 / KPI ----------
+-- horizon で長期・短期を分ける。短期は parent_goal_id で長期にぶら下げる
+-- （例: 長期「12月までに定期購入者100人」の下に 短期「9月末までに40人」）。
 create table if not exists tm_goals (
   id            uuid primary key default gen_random_uuid(),
   title         text not null,
@@ -28,6 +32,15 @@ create table if not exists tm_goals (
   updated_at    timestamptz not null default now()
 );
 
+alter table tm_goals add column if not exists horizon text not null default 'long';
+alter table tm_goals add column if not exists parent_goal_id uuid references tm_goals(id) on delete set null;
+
+do $$ begin
+  alter table tm_goals add constraint tm_goals_horizon_check check (horizon in ('long','short'));
+exception when duplicate_object then null; end $$;
+
+create index if not exists tm_goals_parent_idx on tm_goals(parent_goal_id);
+
 create table if not exists tm_goal_logs (
   id          uuid primary key default gen_random_uuid(),
   goal_id     uuid not null references tm_goals(id) on delete cascade,
@@ -37,6 +50,24 @@ create table if not exists tm_goal_logs (
   created_at  timestamptz not null default now()
 );
 create index if not exists tm_goal_logs_goal_idx on tm_goal_logs(goal_id, recorded_on desc);
+
+-- ---------- プロジェクト（大タスク） ----------
+-- 中のタスクが全部終わっても消さない。同じプロジェクトから次のタスクが出てくるため。
+-- 畳むときは archived を true にする。
+create table if not exists tm_projects (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null,
+  detail     text,
+  category   text not null check (category in ('marketing','system')),
+  goal_id    uuid references tm_goals(id) on delete set null,
+  color      text not null default '#15803d',
+  archived   boolean not null default false,
+  sort_order double precision not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists tm_projects_goal_idx  on tm_projects(goal_id);
+create index if not exists tm_projects_order_idx on tm_projects(archived, sort_order);
 
 -- ---------- 打ち合わせ ----------
 create table if not exists tm_meetings (
@@ -70,10 +101,14 @@ create table if not exists tm_tasks (
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
+
+alter table tm_tasks add column if not exists project_id uuid references tm_projects(id) on delete set null;
+
 create index if not exists tm_tasks_status_idx  on tm_tasks(status, sort_order);
 create index if not exists tm_tasks_owner_idx   on tm_tasks(owner_id);
 create index if not exists tm_tasks_due_idx     on tm_tasks(due_date);
 create index if not exists tm_tasks_meeting_idx on tm_tasks(meeting_id);
+create index if not exists tm_tasks_project_idx on tm_tasks(project_id);
 
 -- ---------- タスクのやり取り ----------
 create table if not exists tm_comments (
@@ -133,21 +168,24 @@ end $$;
 drop trigger if exists tm_tasks_touch    on tm_tasks;
 drop trigger if exists tm_goals_touch    on tm_goals;
 drop trigger if exists tm_meetings_touch on tm_meetings;
+drop trigger if exists tm_projects_touch on tm_projects;
 
 create trigger tm_tasks_touch    before update on tm_tasks    for each row execute function tm_touch_task();
 create trigger tm_goals_touch    before update on tm_goals    for each row execute function tm_touch_updated_at();
 create trigger tm_meetings_touch before update on tm_meetings for each row execute function tm_touch_updated_at();
+create trigger tm_projects_touch before update on tm_projects for each row execute function tm_touch_updated_at();
 
 -- ---------- RLS ----------
 -- 公開ポリシーは作らない。アクセスは全てアプリのサーバー側（service_role）経由。
-alter table tm_members   enable row level security;
-alter table tm_goals     enable row level security;
-alter table tm_goal_logs enable row level security;
-alter table tm_meetings  enable row level security;
-alter table tm_tasks     enable row level security;
-alter table tm_comments  enable row level security;
+alter table tm_members     enable row level security;
+alter table tm_goals       enable row level security;
+alter table tm_goal_logs   enable row level security;
+alter table tm_projects    enable row level security;
+alter table tm_meetings    enable row level security;
+alter table tm_tasks       enable row level security;
+alter table tm_comments    enable row level security;
 alter table tm_inbox_items enable row level security;
-alter table tm_subtasks enable row level security;
+alter table tm_subtasks    enable row level security;
 
 -- ---------- メンバー登録 ----------
 insert into tm_members (id, name, color, sort_order) values
