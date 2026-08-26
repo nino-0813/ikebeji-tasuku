@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/", label: "ホーム", icon: "home" },
   { href: "/today", label: "今日", icon: "today" },
   { href: "/inbox", label: "Inbox", icon: "inbox" },
+  { href: "/projects", label: "プロジェクト", icon: "project" },
   { href: "/board", label: "ボード", icon: "board" },
   { href: "/meetings", label: "打ち合わせ", icon: "meeting" },
   { href: "/goals", label: "目標", icon: "goal" },
@@ -73,6 +74,7 @@ function Icon({ name }: { name: string }) {
   const paths: Record<string, React.ReactNode> = {
     home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-7h6v7"/></>,
     board: <><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="10" rx="1.5"/></>,
+    project: <><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></>,
     today: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="m9 15 2 2 4-4"/></>,
     inbox: <><path d="M4 4h16v16H4z"/><path d="M4 14h4l2 3h4l2-3h4"/></>,
     meeting: <><path d="M8 3v3M16 3v3"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 14h.01M12 14h.01M16 14h.01"/></>,

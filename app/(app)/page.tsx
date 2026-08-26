@@ -4,7 +4,7 @@ import { STALL_DAYS, type Task } from "@/lib/types";
 import { daysSince, daysUntil, formatDate, formatDateLong, isStalled, todayISO } from "@/lib/format";
 import { GoalStrip } from "@/components/GoalStrip";
 import { TaskRow } from "@/components/TaskCard";
-import { ProjectAccordion, NewProjectButton } from "@/components/ProjectParts";
+import { PersonLanes } from "@/components/PersonLanes";
 import { EmptyState, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -86,18 +86,17 @@ export default async function DashboardPage() {
       </section>
 
       <section>
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-sm font-bold tracking-wide text-ink">プロジェクト</h2>
-            <span className="tnum text-xs text-ink-mute">{projects.length}件</span>
-            <span className="text-xs text-ink-mute">
-              クリックすると中のタスクが開きます。完了したタスクは一覧から消えますが、プロジェクトは残ります
-            </span>
-          </div>
+        <div className="mb-3 flex flex-wrap items-baseline gap-2">
+          <h2 className="text-sm font-bold tracking-wide text-ink">いま誰にボールがあるか</h2>
+          <span className="text-xs text-ink-mute">
+            人ごとの列を、プロジェクトの塊に分けています。見出しを押すと畳めます
+          </span>
           <span className="grow" />
-          <NewProjectButton goals={goals} />
+          <Link href="/projects" className="text-xs font-bold text-brand hover:underline">
+            プロジェクトを管理 →
+          </Link>
         </div>
-        <ProjectAccordion projects={projects} tasks={tasks} members={members} goals={goals} />
+        <PersonLanes members={members} tasks={tasks} projects={projects} />
       </section>
 
       <section>
