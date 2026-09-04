@@ -141,6 +141,23 @@ create table if not exists tm_subtasks (
 );
 create index if not exists tm_subtasks_task_idx on tm_subtasks(task_id, sort_order, created_at);
 
+-- ---------- タスク添付ファイル ----------
+create table if not exists tm_task_attachments (
+  id           uuid primary key default gen_random_uuid(),
+  task_id      uuid not null references tm_tasks(id) on delete cascade,
+  file_name    text not null,
+  storage_path text not null unique,
+  content_type text,
+  size_bytes   bigint not null check (size_bytes > 0 and size_bytes <= 10485760),
+  uploaded_by  text references tm_members(id) on delete set null,
+  created_at   timestamptz not null default now()
+);
+create index if not exists tm_task_attachments_task_idx on tm_task_attachments(task_id, created_at);
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('task-attachments', 'task-attachments', false, 10485760)
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit;
+
 -- ---------- 自動更新 ----------
 create or replace function tm_touch_updated_at() returns trigger
 language plpgsql as $$
@@ -186,6 +203,7 @@ alter table tm_tasks       enable row level security;
 alter table tm_comments    enable row level security;
 alter table tm_inbox_items enable row level security;
 alter table tm_subtasks    enable row level security;
+alter table tm_task_attachments enable row level security;
 
 -- ---------- メンバー登録 ----------
 insert into tm_members (id, name, color, sort_order) values

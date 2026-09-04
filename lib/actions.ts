@@ -166,6 +166,17 @@ export async function nudgeTask(id: string): Promise<{ error?: string }> {
 }
 
 export async function deleteTask(id: string): Promise<{ error?: string }> {
+  const { data: attachments, error: attachmentError } = await db
+    .from("tm_task_attachments")
+    .select("storage_path")
+    .eq("task_id", id);
+  if (attachmentError) return { error: attachmentError.message };
+  if (attachments?.length) {
+    const { error: storageError } = await db.storage
+      .from("task-attachments")
+      .remove(attachments.map((item) => item.storage_path));
+    if (storageError) return { error: storageError.message };
+  }
   const { error } = await db.from("tm_tasks").delete().eq("id", id);
   if (error) return { error: error.message };
   refresh();

@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Comment, Goal, Member, Project, Subtask, Task } from "@/lib/types";
+import type { Comment, Goal, Member, Project, Subtask, Task, TaskAttachment } from "@/lib/types";
 import { CATEGORIES, PRIORITIES, STATUSES } from "@/lib/types";
 import { addDaysISO, formatDateLong, todayISO } from "@/lib/format";
 import { addComment, addSubtask, createTask, deleteInboxItem, deleteSubtask, deleteTask, toggleSubtask, updateTask } from "@/lib/actions";
@@ -126,7 +126,8 @@ function TaskDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const isNew = !task;
+  const [activeTaskId, setActiveTaskId] = useState(task?.id);
+  const isNew = !activeTaskId;
 
   const [title, setTitle] = useState(task?.title ?? defaults?.title ?? "");
   const [detail, setDetail] = useState(task?.detail ?? "");
@@ -142,6 +143,7 @@ function TaskDialog({
   const [projectId, setProjectId] = useState(task?.project_id ?? defaults?.project_id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -178,22 +180,45 @@ function TaskDialog({
       project_id: projectId || null,
       meeting_id: task?.meeting_id ?? defaults?.meeting_id ?? null,
     };
-    const res = isNew ? await createTask(payload) : await updateTask(task.id, payload);
-    setSaving(false);
+    let createdId: string | undefined;
+    const res = activeTaskId
+      ? await updateTask(activeTaskId, payload)
+      : await createTask(payload).then((result) => {
+          createdId = result.id;
+          return result;
+        });
     if (res.error) {
+      setSaving(false);
       setError(res.error);
       return;
     }
+    const taskId = activeTaskId ?? createdId;
+    if (taskId && isNew) setActiveTaskId(taskId);
+    if (taskId && pendingFiles.length > 0) {
+      for (const file of pendingFiles) {
+        const form = new FormData();
+        form.append("file", file);
+        const upload = await fetch(`/api/tasks/${taskId}/attachments`, { method: "POST", body: form });
+        if (!upload.ok) {
+          const body = await upload.json().catch(() => ({}));
+          setSaving(false);
+          setError(body.error ?? `「${file.name}」のアップロードに失敗しました。`);
+          router.refresh();
+          return;
+        }
+      }
+    }
     if (isNew && defaults?.inbox_id) await deleteInboxItem(defaults.inbox_id);
+    setSaving(false);
     router.refresh();
     onClose();
   }
 
   async function remove() {
-    if (!task) return;
-    if (!confirm(`「${task.title}」を削除します。よろしいですか？`)) return;
+    if (!activeTaskId) return;
+    if (!confirm(`「${title}」を削除します。よろしいですか？`)) return;
     setSaving(true);
-    const res = await deleteTask(task.id);
+    const res = await deleteTask(activeTaskId);
     setSaving(false);
     if (res.error) {
       setError(res.error);
@@ -396,8 +421,14 @@ function TaskDialog({
             />
           </div>
 
-          {!isNew && <SubtaskList taskId={task.id} />}
-          {!isNew && <CommentThread taskId={task.id} members={members} me={me} />}
+          <AttachmentList
+            taskId={activeTaskId}
+            pendingFiles={pendingFiles}
+            onPendingFilesChange={setPendingFiles}
+          />
+
+          {activeTaskId && <SubtaskList taskId={activeTaskId} />}
+          {activeTaskId && <CommentThread taskId={activeTaskId} members={members} me={me} />}
 
           {error && (
             <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -441,6 +472,128 @@ function TaskDialog({
       </div>
     </div>
   );
+}
+
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+function AttachmentList({
+  taskId,
+  pendingFiles,
+  onPendingFilesChange,
+}: {
+  taskId?: string;
+  pendingFiles: File[];
+  onPendingFilesChange: (files: File[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [items, setItems] = useState<TaskAttachment[] | null>(taskId ? null : []);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!taskId) return;
+    const res = await fetch(`/api/tasks/${taskId}/attachments`);
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? "添付ファイルを取得できませんでした。");
+    setItems(body.attachments ?? []);
+  }, [taskId]);
+
+  useEffect(() => {
+    if (!taskId) return;
+    let alive = true;
+    fetch(`/api/tasks/${taskId}/attachments`)
+      .then(async (res) => ({ ok: res.ok, body: await res.json() }))
+      .then(({ ok, body }) => {
+        if (!alive) return;
+        if (!ok) throw new Error(body.error);
+        setItems(body.attachments ?? []);
+      })
+      .catch((e) => { if (alive) { setItems([]); setError(e.message); } });
+    return () => { alive = false; };
+  }, [taskId]);
+
+  async function choose(files: FileList | null) {
+    if (!files?.length) return;
+    setError(null);
+    const selected = Array.from(files);
+    const oversized = selected.find((file) => file.size > MAX_ATTACHMENT_BYTES);
+    if (oversized) {
+      setError(`「${oversized.name}」は10MBを超えています。`);
+      return;
+    }
+    if (!taskId) {
+      onPendingFilesChange([...pendingFiles, ...selected]);
+      return;
+    }
+    setBusy(true);
+    for (const file of selected) {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/tasks/${taskId}/attachments`, { method: "POST", body: form });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? `「${file.name}」をアップロードできませんでした。`);
+        break;
+      }
+    }
+    await load().catch((e) => setError(e.message));
+    setBusy(false);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  async function remove(item: TaskAttachment) {
+    if (!taskId || !confirm(`「${item.file_name}」を削除しますか？`)) return;
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/tasks/${taskId}/attachments/${item.id}`, { method: "DELETE" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) setError(body.error ?? "削除できませんでした。");
+    else await load().catch((e) => setError(e.message));
+    setBusy(false);
+  }
+
+  return (
+    <div className="rounded-lg border border-line p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="label mb-0">添付ファイル</p>
+          <p className="text-[11px] text-ink-mute">1ファイル10MBまで</p>
+        </div>
+        <button type="button" disabled={busy} onClick={() => inputRef.current?.click()} className="rounded-lg border border-line-strong bg-white px-3 py-1.5 text-xs font-medium hover:bg-stone-50 disabled:opacity-40">
+          {busy ? "処理中…" : "ファイルを選択"}
+        </button>
+        <input ref={inputRef} type="file" multiple className="hidden" onChange={(e) => void choose(e.target.files)} />
+      </div>
+      <div className="mt-2 space-y-1">
+        {items === null && <p className="text-xs text-ink-mute">読み込み中…</p>}
+        {items?.map((item) => (
+          <div key={item.id} className="group flex items-center gap-2 rounded px-2 py-1.5 hover:bg-stone-50">
+            <span aria-hidden="true">📎</span>
+            <a className="min-w-0 flex-1 truncate text-sm text-brand hover:underline" href={`/api/tasks/${taskId}/attachments/${item.id}`} target="_blank" rel="noreferrer">{item.file_name}</a>
+            <span className="shrink-0 text-[11px] text-ink-mute">{formatBytes(item.size_bytes)}</span>
+            <button type="button" disabled={busy} onClick={() => void remove(item)} className="px-1 text-xs text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100">削除</button>
+          </div>
+        ))}
+        {pendingFiles.map((file, index) => (
+          <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2 rounded bg-brand-soft px-2 py-1.5">
+            <span aria-hidden="true">📎</span>
+            <span className="min-w-0 flex-1 truncate text-sm">{file.name}</span>
+            <span className="text-[11px] text-ink-mute">{formatBytes(file.size)}</span>
+            <button type="button" onClick={() => onPendingFilesChange(pendingFiles.filter((_, i) => i !== index))} className="px-1 text-xs text-red-600">取消</button>
+          </div>
+        ))}
+        {items?.length === 0 && pendingFiles.length === 0 && <p className="text-xs text-ink-mute">まだ添付ファイルはありません。</p>}
+      </div>
+      {!taskId && pendingFiles.length > 0 && <p className="mt-2 text-[11px] text-ink-mute">タスクの保存時にアップロードします。</p>}
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function SubtaskList({ taskId }: { taskId: string }) {

@@ -104,6 +104,17 @@ export type Subtask = {
   created_at: string;
 };
 
+export type TaskAttachment = {
+  id: string;
+  task_id: string;
+  file_name: string;
+  storage_path: string;
+  content_type: string | null;
+  size_bytes: number;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
 /** ステータスの表示定義。ボードの列順もこの順番。 */
 export const STATUSES: { key: Status; label: string; hint: string }[] = [
   { key: "todo", label: "未着手", hint: "やると決まった。まだ手をつけていない" },
