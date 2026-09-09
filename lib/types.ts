@@ -10,8 +10,18 @@ export type Member = {
   sort_order: number;
 };
 
+export type Workspace = {
+  id: string;
+  name: string;
+  color: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Task = {
   id: string;
+  workspace_id: string;
   title: string;
   detail: string | null;
   category: Category;
@@ -32,6 +42,7 @@ export type Task = {
 
 export type Goal = {
   id: string;
+  workspace_id: string;
   title: string;
   category: Category;
   horizon: Horizon;
@@ -50,6 +61,7 @@ export type Goal = {
 
 export type Project = {
   id: string;
+  workspace_id: string;
   title: string;
   detail: string | null;
   category: Category;
@@ -72,6 +84,7 @@ export type GoalLog = {
 
 export type Meeting = {
   id: string;
+  workspace_id: string;
   held_on: string;
   title: string;
   notes: string | null;
@@ -89,6 +102,7 @@ export type Comment = {
 
 export type InboxItem = {
   id: string;
+  workspace_id: string;
   title: string;
   detail: string | null;
   created_by: string | null;

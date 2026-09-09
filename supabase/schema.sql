@@ -6,6 +6,23 @@
 -- 階層:  目標（長期 → 短期） → プロジェクト → タスク → サブタスク
 -- ============================================================
 
+-- ---------- ページ ----------
+create table if not exists tm_workspaces (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null check (char_length(name) between 1 and 40),
+  color      text not null default '#15803d',
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+insert into tm_workspaces (id, name, color, sort_order) values
+  ('00000000-0000-4000-8000-000000000001', 'イケベジweb', '#15803d', 1),
+  ('00000000-0000-4000-8000-000000000002', 'naco',         '#2563eb', 2),
+  ('00000000-0000-4000-8000-000000000003', '本間と合田',   '#d97706', 3),
+  ('00000000-0000-4000-8000-000000000004', '本間 個人',    '#7c3aed', 4)
+on conflict (id) do update set name = excluded.name, color = excluded.color, sort_order = excluded.sort_order;
+
 -- ---------- メンバー ----------
 create table if not exists tm_members (
   id          text primary key,
@@ -141,6 +158,31 @@ create table if not exists tm_subtasks (
 );
 create index if not exists tm_subtasks_task_idx on tm_subtasks(task_id, sort_order, created_at);
 
+-- ---------- ページ所属 ----------
+alter table tm_goals       add column if not exists workspace_id uuid references tm_workspaces(id) on delete restrict;
+alter table tm_projects    add column if not exists workspace_id uuid references tm_workspaces(id) on delete restrict;
+alter table tm_meetings    add column if not exists workspace_id uuid references tm_workspaces(id) on delete restrict;
+alter table tm_tasks       add column if not exists workspace_id uuid references tm_workspaces(id) on delete restrict;
+alter table tm_inbox_items add column if not exists workspace_id uuid references tm_workspaces(id) on delete restrict;
+
+update tm_goals       set workspace_id = '00000000-0000-4000-8000-000000000001' where workspace_id is null;
+update tm_projects    set workspace_id = '00000000-0000-4000-8000-000000000001' where workspace_id is null;
+update tm_meetings    set workspace_id = '00000000-0000-4000-8000-000000000001' where workspace_id is null;
+update tm_tasks       set workspace_id = '00000000-0000-4000-8000-000000000001' where workspace_id is null;
+update tm_inbox_items set workspace_id = '00000000-0000-4000-8000-000000000001' where workspace_id is null;
+
+alter table tm_goals       alter column workspace_id set default '00000000-0000-4000-8000-000000000001', alter column workspace_id set not null;
+alter table tm_projects    alter column workspace_id set default '00000000-0000-4000-8000-000000000001', alter column workspace_id set not null;
+alter table tm_meetings    alter column workspace_id set default '00000000-0000-4000-8000-000000000001', alter column workspace_id set not null;
+alter table tm_tasks       alter column workspace_id set default '00000000-0000-4000-8000-000000000001', alter column workspace_id set not null;
+alter table tm_inbox_items alter column workspace_id set default '00000000-0000-4000-8000-000000000001', alter column workspace_id set not null;
+
+create index if not exists tm_goals_workspace_idx    on tm_goals(workspace_id);
+create index if not exists tm_projects_workspace_idx on tm_projects(workspace_id);
+create index if not exists tm_meetings_workspace_idx on tm_meetings(workspace_id);
+create index if not exists tm_tasks_workspace_idx    on tm_tasks(workspace_id);
+create index if not exists tm_inbox_workspace_idx    on tm_inbox_items(workspace_id);
+
 -- ---------- タスク添付ファイル ----------
 create table if not exists tm_task_attachments (
   id           uuid primary key default gen_random_uuid(),
@@ -186,15 +228,18 @@ drop trigger if exists tm_tasks_touch    on tm_tasks;
 drop trigger if exists tm_goals_touch    on tm_goals;
 drop trigger if exists tm_meetings_touch on tm_meetings;
 drop trigger if exists tm_projects_touch on tm_projects;
+drop trigger if exists tm_workspaces_touch on tm_workspaces;
 
 create trigger tm_tasks_touch    before update on tm_tasks    for each row execute function tm_touch_task();
 create trigger tm_goals_touch    before update on tm_goals    for each row execute function tm_touch_updated_at();
 create trigger tm_meetings_touch before update on tm_meetings for each row execute function tm_touch_updated_at();
 create trigger tm_projects_touch before update on tm_projects for each row execute function tm_touch_updated_at();
+create trigger tm_workspaces_touch before update on tm_workspaces for each row execute function tm_touch_updated_at();
 
 -- ---------- RLS ----------
 -- 公開ポリシーは作らない。アクセスは全てアプリのサーバー側（service_role）経由。
 alter table tm_members     enable row level security;
+alter table tm_workspaces  enable row level security;
 alter table tm_goals       enable row level security;
 alter table tm_goal_logs   enable row level security;
 alter table tm_projects    enable row level security;

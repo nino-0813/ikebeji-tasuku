@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./supabase";
-import { ME_COOKIE } from "./data";
+import { getActiveWorkspaceId, ME_COOKIE, WORKSPACE_COOKIE } from "./data";
 import { AUTH_COOKIE, authToken } from "./auth";
 import type { Category, Horizon, Priority, Status } from "./types";
 
@@ -44,6 +44,48 @@ export async function setMe(memberId: string) {
   refresh();
 }
 
+// ---------------------------------------------------------------- ページ
+
+export async function setWorkspace(workspaceId: string): Promise<{ error?: string }> {
+  const { data, error } = await db.from("tm_workspaces").select("id").eq("id", workspaceId).maybeSingle();
+  if (error || !data) return { error: error?.message ?? "ページが見つかりません。" };
+
+  const store = await cookies();
+  store.set(WORKSPACE_COOKIE, workspaceId, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  });
+  refresh();
+  return {};
+}
+
+export async function createWorkspace(name: string): Promise<{ error?: string; id?: string }> {
+  const cleanName = name.trim();
+  if (!cleanName) return { error: "ページ名を入力してください。" };
+  if (cleanName.length > 40) return { error: "ページ名は40文字以内で入力してください。" };
+
+  const { count } = await db.from("tm_workspaces").select("id", { count: "exact", head: true });
+  const colors = ["#15803d", "#2563eb", "#d97706", "#7c3aed", "#db2777", "#0891b2"];
+  const { data, error } = await db
+    .from("tm_workspaces")
+    .insert({ name: cleanName, color: colors[(count ?? 0) % colors.length], sort_order: count ?? 0 })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+
+  const store = await cookies();
+  store.set(WORKSPACE_COOKIE, data.id, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  });
+  refresh();
+  return { id: data.id };
+}
+
 // ---------------------------------------------------------------- タスク
 
 export type TaskInput = {
@@ -74,10 +116,12 @@ export async function createTask(input: TaskInput): Promise<{ error?: string; id
   const error = validate(input);
   if (error) return { error };
 
+  const workspaceId = await getActiveWorkspaceId();
   // 新規は各列の先頭に積む
   const { data: top } = await db
     .from("tm_tasks")
     .select("sort_order")
+    .eq("workspace_id", workspaceId)
     .eq("status", input.status ?? "todo")
     .order("sort_order", { ascending: true })
     .limit(1);
@@ -87,6 +131,7 @@ export async function createTask(input: TaskInput): Promise<{ error?: string; id
     .from("tm_tasks")
     .insert({
       title: input.title.trim(),
+      workspace_id: workspaceId,
       detail: input.detail?.trim() || null,
       category: input.category,
       owner_id: input.owner_id,
@@ -197,8 +242,10 @@ export async function addComment(taskId: string, authorId: string, body: string)
 
 export async function createInboxItem(title: string, createdBy?: string | null) {
   if (!title.trim()) return { error: "メモを入力してください。" };
+  const workspaceId = await getActiveWorkspaceId();
   const { error } = await db.from("tm_inbox_items").insert({
     title: title.trim(),
+    workspace_id: workspaceId,
     created_by: createdBy || null,
   });
   if (error) return { error: error.message };
@@ -250,9 +297,10 @@ export async function deleteSubtask(id: string) {
 // ---------------------------------------------------------------- 打ち合わせ
 
 export async function createMeeting(title: string, heldOn: string) {
+  const workspaceId = await getActiveWorkspaceId();
   const { data, error } = await db
     .from("tm_meetings")
-    .insert({ title: title.trim() || "打ち合わせ", held_on: heldOn })
+    .insert({ title: title.trim() || "打ち合わせ", held_on: heldOn, workspace_id: workspaceId })
     .select("id")
     .single();
   if (error) return { error: error.message };
@@ -287,10 +335,12 @@ export type ProjectInput = {
 export async function createProject(input: ProjectInput): Promise<{ error?: string; id?: string }> {
   if (!input.title.trim()) return { error: "プロジェクト名を入れてください。" };
 
+  const workspaceId = await getActiveWorkspaceId();
   // 新規は一覧の先頭に積む
   const { data: top } = await db
     .from("tm_projects")
     .select("sort_order")
+    .eq("workspace_id", workspaceId)
     .eq("archived", false)
     .order("sort_order", { ascending: true })
     .limit(1);
@@ -300,6 +350,7 @@ export async function createProject(input: ProjectInput): Promise<{ error?: stri
     .from("tm_projects")
     .insert({
       title: input.title.trim(),
+      workspace_id: workspaceId,
       detail: input.detail?.trim() || null,
       category: input.category,
       goal_id: input.goal_id || null,
@@ -369,8 +420,10 @@ export type GoalInput = {
 export async function createGoal(input: GoalInput) {
   if (!input.title.trim()) return { error: "目標名を入れてください。" };
   if (!input.deadline) return { error: "期限を入れてください。" };
+  const workspaceId = await getActiveWorkspaceId();
   const { error } = await db.from("tm_goals").insert({
     ...input,
+    workspace_id: workspaceId,
     title: input.title.trim(),
     horizon: input.horizon ?? "long",
     parent_goal_id: input.parent_goal_id || null,
