@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getGoalLogs, getGoals, getMembers, getProjects, getTasks } from "@/lib/data";
+import { getGoalLogs, getGoals, getProjects, getTasks, getWorkspaceMembers } from "@/lib/data";
 import type { Goal, GoalLog, Member, Project, Task } from "@/lib/types";
 import { formatDate, formatValue } from "@/lib/format";
 import { goalStats } from "@/lib/goal";
@@ -19,7 +19,7 @@ export default async function GoalsPage() {
   const [goals, tasks, members, projects] = await Promise.all([
     getGoals(),
     getTasks(),
-    getMembers(),
+    getWorkspaceMembers(),
     getProjects(),
   ]);
   const logsByGoal = Object.fromEntries(

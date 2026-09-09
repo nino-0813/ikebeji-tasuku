@@ -36,7 +36,7 @@ export function Nav({
     <aside className="app-sidebar">
       <a className="skip-link" href="#main-content">本文へ移動</a>
       <div className="sidebar-inner">
-        <WorkspaceSwitcher workspaces={workspaces} currentWorkspace={currentWorkspace} />
+        <WorkspaceSwitcher workspaces={workspaces} currentWorkspace={currentWorkspace} members={members} />
 
         <button
           onClick={() => openNew()}
@@ -95,14 +95,17 @@ function Icon({ name }: { name: string }) {
 function WorkspaceSwitcher({
   workspaces,
   currentWorkspace,
+  members,
 }: {
   workspaces: Workspace[];
   currentWorkspace: Workspace | null;
+  members: Member[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
+  const [memberIds, setMemberIds] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
 
@@ -124,12 +127,13 @@ function WorkspaceSwitcher({
     event.preventDefault();
     setError("");
     start(async () => {
-      const result = await createWorkspace(name);
+      const result = await createWorkspace(name, memberIds);
       if (result.error) {
         setError(result.error);
         return;
       }
       setName("");
+      setMemberIds([]);
       setAdding(false);
       setOpen(false);
       router.push("/");
@@ -172,7 +176,12 @@ function WorkspaceSwitcher({
                 className="workspace-option"
               >
                 <span className="workspace-dot" style={{ background: workspace.color }} />
-                <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{workspace.name}</span>
+                  <span className="block truncate text-[10px] text-ink-mute">
+                    {workspace.members.map((member) => member.name).join("・") || "構成員なし"}
+                  </span>
+                </span>
                 {workspace.id === currentWorkspace?.id && <Icon name="check" />}
               </button>
             ))}
@@ -191,10 +200,31 @@ function WorkspaceSwitcher({
                     className="field min-w-0 py-1 text-xs"
                     placeholder="ページ名"
                   />
-                  <button type="submit" disabled={pending || !name.trim()} className="workspace-add-submit">
+                  <button type="submit" disabled={pending || !name.trim() || !memberIds.length} className="workspace-add-submit">
                     追加
                   </button>
                 </div>
+                <fieldset className="mt-2">
+                  <legend className="mb-1 text-[10px] font-medium text-ink-mute">構成員</legend>
+                  <div className="flex flex-wrap gap-1">
+                    {members.map((member) => {
+                      const selected = memberIds.includes(member.id);
+                      return (
+                        <label key={member.id} className={`workspace-member-chip ${selected ? "workspace-member-chip-selected" : ""}`}>
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={selected}
+                            onChange={() => setMemberIds((current) =>
+                              selected ? current.filter((id) => id !== member.id) : [...current, member.id]
+                            )}
+                          />
+                          {member.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
                 {error && <p className="mt-1 text-[11px] text-alert" role="alert">{error}</p>}
               </form>
             ) : (

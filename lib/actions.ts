@@ -61,10 +61,11 @@ export async function setWorkspace(workspaceId: string): Promise<{ error?: strin
   return {};
 }
 
-export async function createWorkspace(name: string): Promise<{ error?: string; id?: string }> {
+export async function createWorkspace(name: string, memberIds: string[]): Promise<{ error?: string; id?: string }> {
   const cleanName = name.trim();
   if (!cleanName) return { error: "ページ名を入力してください。" };
   if (cleanName.length > 40) return { error: "ページ名は40文字以内で入力してください。" };
+  if (!memberIds.length) return { error: "構成員を1人以上選んでください。" };
 
   const { count } = await db.from("tm_workspaces").select("id", { count: "exact", head: true });
   const colors = ["#15803d", "#2563eb", "#d97706", "#7c3aed", "#db2777", "#0891b2"];
@@ -74,6 +75,14 @@ export async function createWorkspace(name: string): Promise<{ error?: string; i
     .select("id")
     .single();
   if (error) return { error: error.message };
+
+  const { error: memberError } = await db.from("tm_workspace_members").insert(
+    [...new Set(memberIds)].map((memberId) => ({ workspace_id: data.id, member_id: memberId })),
+  );
+  if (memberError) {
+    await db.from("tm_workspaces").delete().eq("id", data.id);
+    return { error: memberError.message };
+  }
 
   const store = await cookies();
   store.set(WORKSPACE_COOKIE, data.id, {

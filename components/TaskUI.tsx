@@ -134,7 +134,9 @@ function TaskDialog({
   const [category, setCategory] = useState<Task["category"]>(
     task?.category ?? defaults?.category ?? "marketing",
   );
-  const [ownerId, setOwnerId] = useState(task?.owner_id ?? defaults?.owner_id ?? me?.id ?? "");
+  const [ownerId, setOwnerId] = useState(
+    task?.owner_id ?? defaults?.owner_id ?? members.find((member) => member.id === me?.id)?.id ?? members[0]?.id ?? "",
+  );
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaults?.due_date ?? "");
   const [priority, setPriority] = useState<Task["priority"]>(task?.priority ?? "mid");
   const [status, setStatus] = useState<Task["status"]>(task?.status ?? defaults?.status ?? "todo");

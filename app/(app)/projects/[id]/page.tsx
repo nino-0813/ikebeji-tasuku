@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getGoals, getMembers, getProject, getTasks } from "@/lib/data";
+import { getGoals, getProject, getTasks, getWorkspaceMembers } from "@/lib/data";
 import { daysUntil, isStalled } from "@/lib/format";
 import { goalStats } from "@/lib/goal";
 import { formatValue } from "@/lib/format";
@@ -16,7 +16,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const [project, tasks, members, goals] = await Promise.all([
     getProject(id),
     getTasks(),
-    getMembers(),
+    getWorkspaceMembers(),
     getGoals(),
   ]);
   if (!project) notFound();

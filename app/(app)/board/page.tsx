@@ -1,11 +1,11 @@
-import { getMembers, getTasks } from "@/lib/data";
+import { getTasks, getWorkspaceMembers } from "@/lib/data";
 import { Board } from "@/components/Board";
 import { AddTaskButton } from "@/components/AddTaskButton";
 
 export const dynamic = "force-dynamic";
 
 export default async function BoardPage() {
-  const [tasks, members] = await Promise.all([getTasks(), getMembers()]);
+  const [tasks, members] = await Promise.all([getTasks(), getWorkspaceMembers()]);
 
   return (
     <div className="space-y-5">

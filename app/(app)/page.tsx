@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getGoals, getMeetings, getMembers, getProjects, getTasks } from "@/lib/data";
+import { getGoals, getMeetings, getProjects, getTasks, getWorkspaceMembers } from "@/lib/data";
 import { STALL_DAYS, type Task } from "@/lib/types";
 import { daysSince, daysUntil, formatDate, formatDateLong, isStalled, todayISO } from "@/lib/format";
 import { GoalStrip } from "@/components/GoalStrip";
@@ -19,7 +19,7 @@ function byUrgency(a: Task, b: Task) {
 export default async function DashboardPage() {
   const [tasks, members, goals, projects, meetings] = await Promise.all([
     getTasks(),
-    getMembers(),
+    getWorkspaceMembers(),
     getGoals(),
     getProjects(),
     getMeetings(),

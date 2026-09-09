@@ -1,4 +1,4 @@
-import { getGoals, getMembers, getProjects, getTasks } from "@/lib/data";
+import { getGoals, getProjects, getTasks, getWorkspaceMembers } from "@/lib/data";
 import { ProjectAccordion, NewProjectButton } from "@/components/ProjectParts";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export default async function ProjectsPage() {
   const [projects, tasks, members, goals] = await Promise.all([
     getProjects(),
     getTasks(),
-    getMembers(),
+    getWorkspaceMembers(),
     getGoals(),
   ]);
 

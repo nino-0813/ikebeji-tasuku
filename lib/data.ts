@@ -6,10 +6,40 @@ export const ME_COOKIE = "tm_me";
 export const WORKSPACE_COOKIE = "tm_workspace";
 export const DEFAULT_WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 
+function relatedMember(value: unknown): Member | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (!candidate || typeof candidate !== "object") return null;
+  return candidate as Member;
+}
+
 export async function getWorkspaces(): Promise<Workspace[]> {
-  const { data, error } = await db.from("tm_workspaces").select("*").order("sort_order").order("created_at");
+  const [{ data, error }, { data: memberships, error: membershipError }] = await Promise.all([
+    db.from("tm_workspaces").select("*").order("sort_order").order("created_at"),
+    db.from("tm_workspace_members").select("workspace_id, tm_members(*)"),
+  ]);
   if (error) throw error;
-  return data ?? [];
+  if (membershipError) throw membershipError;
+  return (data ?? []).map((workspace) => ({
+    ...workspace,
+    members: (memberships ?? [])
+      .filter((membership) => membership.workspace_id === workspace.id)
+      .map((membership) => relatedMember(membership.tm_members))
+      .filter((member): member is Member => Boolean(member))
+      .sort((a, b) => a.sort_order - b.sort_order),
+  }));
+}
+
+export async function getWorkspaceMembers(): Promise<Member[]> {
+  const workspaceId = await getActiveWorkspaceId();
+  const { data, error } = await db
+    .from("tm_workspace_members")
+    .select("tm_members(*)")
+    .eq("workspace_id", workspaceId);
+  if (error) throw error;
+  return (data ?? [])
+    .map((membership) => relatedMember(membership.tm_members))
+    .filter((member): member is Member => Boolean(member))
+    .sort((a, b) => a.sort_order - b.sort_order);
 }
 
 export async function getActiveWorkspaceId(): Promise<string> {

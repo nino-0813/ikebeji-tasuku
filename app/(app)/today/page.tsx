@@ -1,4 +1,4 @@
-import { getMembers, getTasks } from "@/lib/data";
+import { getTasks, getWorkspaceMembers } from "@/lib/data";
 import { daysUntil, formatDateLong, todayISO } from "@/lib/format";
 import type { Task } from "@/lib/types";
 import { TaskRow } from "@/components/TaskCard";
@@ -13,7 +13,7 @@ function urgency(a: Task, b: Task) {
 }
 
 export default async function TodayPage() {
-  const [tasks, members] = await Promise.all([getTasks(), getMembers()]);
+  const [tasks, members] = await Promise.all([getTasks(), getWorkspaceMembers()]);
   const open = tasks.filter((task) => task.status !== "done");
   const overdue = open.filter((task) => daysUntil(task.due_date) < 0).sort(urgency);
   const today = open.filter((task) => daysUntil(task.due_date) === 0).sort(urgency);
@@ -34,6 +34,6 @@ export default async function TodayPage() {
   );
 }
 
-function TaskSection({ title, tasks, members, empty }: { title: string; tasks: Task[]; members: Awaited<ReturnType<typeof getMembers>>; empty: string }) {
+function TaskSection({ title, tasks, members, empty }: { title: string; tasks: Task[]; members: Awaited<ReturnType<typeof getWorkspaceMembers>>; empty: string }) {
   return <section><SectionTitle count={tasks.length}>{title}</SectionTitle>{tasks.length ? <div className="card divide-y divide-line px-2 py-1">{tasks.map((task) => <TaskRow key={task.id} task={task} members={members} />)}</div> : <EmptyState>{empty}</EmptyState>}</section>;
 }

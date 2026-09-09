@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getMeeting, getMeetings, getMembers, getTasks } from "@/lib/data";
+import { getMeeting, getMeetings, getTasks, getWorkspaceMembers } from "@/lib/data";
 import { formatDate } from "@/lib/format";
 import { MeetingHeader, MeetingNotes } from "@/components/MeetingParts";
 import { TaskRow } from "@/components/TaskCard";
@@ -15,7 +15,7 @@ export default async function MeetingPage({ params }: PageProps<"/meetings/[id]"
     getMeeting(id),
     getMeetings(),
     getTasks(),
-    getMembers(),
+    getWorkspaceMembers(),
   ]);
   if (!meeting) notFound();
 
