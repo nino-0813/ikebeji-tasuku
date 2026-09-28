@@ -19,7 +19,8 @@ create table if not exists tm_workspaces (
 insert into tm_workspaces (id, name, color, sort_order) values
   ('00000000-0000-4000-8000-000000000001', 'イケベジweb', '#15803d', 1),
   ('00000000-0000-4000-8000-000000000002', 'naco',         '#2563eb', 2),
-  ('00000000-0000-4000-8000-000000000004', '本間 個人',    '#7c3aed', 3)
+  ('00000000-0000-4000-8000-000000000004', '本間 個人',    '#7c3aed', 3),
+  ('00000000-0000-4000-8000-000000000005', 'with dock',    '#0891b2', 4)
 on conflict (id) do update set name = excluded.name, color = excluded.color, sort_order = excluded.sort_order;
 
 -- ---------- メンバー ----------
@@ -253,7 +254,8 @@ alter table tm_task_attachments enable row level security;
 insert into tm_members (id, name, color, sort_order) values
   ('ninomiya', '二宮',   '#2563eb', 1),
   ('honma',    '本間',   '#059669', 2),
-  ('goda',     'ゴーダ', '#d97706', 3)
+  ('goda',     'ゴーダ', '#d97706', 3),
+  ('toru',     'とおるさん', '#0891b2', 4)
 on conflict (id) do update
   set name = excluded.name, color = excluded.color, sort_order = excluded.sort_order;
 
@@ -272,7 +274,10 @@ insert into tm_workspace_members (workspace_id, member_id) values
   ('00000000-0000-4000-8000-000000000001', 'goda'),
   ('00000000-0000-4000-8000-000000000002', 'honma'),
   ('00000000-0000-4000-8000-000000000002', 'goda'),
-  ('00000000-0000-4000-8000-000000000004', 'honma')
+  ('00000000-0000-4000-8000-000000000004', 'honma'),
+  ('00000000-0000-4000-8000-000000000005', 'honma'),
+  ('00000000-0000-4000-8000-000000000005', 'ninomiya'),
+  ('00000000-0000-4000-8000-000000000005', 'toru')
 on conflict (workspace_id, member_id) do nothing;
 
 alter table tm_workspace_members enable row level security;
