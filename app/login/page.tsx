@@ -3,6 +3,8 @@ import { isConfigured } from "@/lib/supabase";
 import { SetupNotice } from "@/components/SetupNotice";
 import { LoginForm } from "./LoginForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function LoginPage() {
   if (!isConfigured()) return <SetupNotice />;
   const members = await getMembers();
