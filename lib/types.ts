@@ -28,6 +28,7 @@ export type Task = {
   category: Category;
   status: Status;
   owner_id: string;
+  start_date: string;
   due_date: string;
   priority: Priority;
   waiting_on: string | null;

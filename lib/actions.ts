@@ -102,6 +102,7 @@ export type TaskInput = {
   detail?: string | null;
   category: Category;
   owner_id: string;
+  start_date?: string;
   due_date: string;
   priority?: Priority;
   status?: Status;
@@ -118,6 +119,7 @@ function validate(input: TaskInput): string | null {
   if (!input.title.trim()) return "タスク名を入れてください。";
   if (!input.owner_id) return "担当者（ボールを持つ人）を選んでください。";
   if (!input.due_date) return "期限を入れてください。";
+  if (input.start_date && input.start_date > input.due_date) return "開始日は期限以前にしてください。";
   return null;
 }
 
@@ -144,6 +146,7 @@ export async function createTask(input: TaskInput): Promise<{ error?: string; id
       detail: input.detail?.trim() || null,
       category: input.category,
       owner_id: input.owner_id,
+      start_date: input.start_date || new Date().toISOString().slice(0, 10),
       due_date: input.due_date,
       priority: input.priority ?? "mid",
       status: input.status ?? "todo",
@@ -168,6 +171,8 @@ export async function updateTask(
   if (patch.title !== undefined && !patch.title.trim()) return { error: "タスク名は空にできません。" };
   if (patch.owner_id !== undefined && !patch.owner_id) return { error: "担当者は空にできません。" };
   if (patch.due_date !== undefined && !patch.due_date) return { error: "期限は空にできません。" };
+  if (patch.start_date && patch.due_date && patch.start_date > patch.due_date)
+    return { error: "開始日は期限以前にしてください。" };
 
   const clean: Record<string, unknown> = { ...patch };
   if (typeof clean.title === "string") clean.title = clean.title.trim();

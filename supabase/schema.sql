@@ -107,6 +107,7 @@ create table if not exists tm_tasks (
   category          text not null check (category in ('marketing','system')),
   status            text not null default 'todo' check (status in ('todo','doing','waiting','done')),
   owner_id          text not null references tm_members(id),
+  start_date        date not null default current_date,
   due_date          date not null,
   priority          text not null default 'mid' check (priority in ('high','mid','low')),
   waiting_on        text,
@@ -120,12 +121,21 @@ create table if not exists tm_tasks (
 );
 
 alter table tm_tasks add column if not exists project_id uuid references tm_projects(id) on delete set null;
+alter table tm_tasks add column if not exists start_date date;
+update tm_tasks set start_date = least(created_at::date, due_date) where start_date is null;
+alter table tm_tasks alter column start_date set default current_date;
+alter table tm_tasks alter column start_date set not null;
+
+do $$ begin
+  alter table tm_tasks add constraint tm_tasks_date_order_check check (start_date <= due_date);
+exception when duplicate_object then null; end $$;
 
 create index if not exists tm_tasks_status_idx  on tm_tasks(status, sort_order);
 create index if not exists tm_tasks_owner_idx   on tm_tasks(owner_id);
 create index if not exists tm_tasks_due_idx     on tm_tasks(due_date);
 create index if not exists tm_tasks_meeting_idx on tm_tasks(meeting_id);
 create index if not exists tm_tasks_project_idx on tm_tasks(project_id);
+create index if not exists tm_tasks_start_date_idx on tm_tasks(start_date);
 
 -- ---------- タスクのやり取り ----------
 create table if not exists tm_comments (

@@ -12,6 +12,7 @@ export type NewTaskDefaults = {
   title?: string;
   category?: Task["category"];
   owner_id?: string;
+  start_date?: string;
   status?: Task["status"];
   goal_id?: string | null;
   project_id?: string | null;
@@ -137,6 +138,7 @@ function TaskDialog({
   const [ownerId, setOwnerId] = useState(
     task?.owner_id ?? defaults?.owner_id ?? members.find((member) => member.id === me?.id)?.id ?? members[0]?.id ?? "",
   );
+  const [startDate, setStartDate] = useState(task?.start_date ?? defaults?.start_date ?? todayISO());
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaults?.due_date ?? "");
   const [priority, setPriority] = useState<Task["priority"]>(task?.priority ?? "mid");
   const [status, setStatus] = useState<Task["status"]>(task?.status ?? defaults?.status ?? "todo");
@@ -163,6 +165,7 @@ function TaskDialog({
   if (!title.trim()) missing.push("タスク名");
   if (!ownerId) missing.push("担当者");
   if (!dueDate) missing.push("期限");
+  if (startDate && dueDate && startDate > dueDate) missing.push("開始日と期限の順序");
   const canSave = missing.length === 0 && !saving;
 
   async function save() {
@@ -174,6 +177,7 @@ function TaskDialog({
       detail,
       category,
       owner_id: ownerId,
+      start_date: startDate,
       due_date: dueDate,
       priority,
       status,
@@ -311,6 +315,19 @@ function TaskDialog({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
+              <label className="label">開始日</label>
+              <input
+                type="date"
+                className="field tnum"
+                value={startDate}
+                max={dueDate || undefined}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+              {startDate && (
+                <p className="tnum mt-1 text-[11px] text-ink-mute">{formatDateLong(startDate)}</p>
+              )}
+            </div>
+            <div>
               <label className="label">
                 期限<Req />
               </label>
@@ -318,6 +335,7 @@ function TaskDialog({
                 type="date"
                 className="field tnum"
                 value={dueDate}
+                min={startDate || undefined}
                 onChange={(e) => setDueDate(e.target.value)}
               />
               <div className="mt-1.5 flex flex-wrap gap-1">
@@ -336,24 +354,25 @@ function TaskDialog({
                 <p className="tnum mt-1 text-[11px] text-ink-mute">{formatDateLong(dueDate)}</p>
               )}
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="label">優先度</label>
-                <Segmented
-                  options={PRIORITIES.map((p) => ({ key: p.key, label: p.label }))}
-                  value={priority}
-                  onChange={(v) => setPriority(v as Task["priority"])}
-                />
-              </div>
-              <div>
-                <label className="label">ステータス</label>
-                <Segmented
-                  options={STATUSES.map((s) => ({ key: s.key, label: s.label }))}
-                  value={status}
-                  onChange={(v) => setStatus(v as Task["status"])}
-                  small
-                />
-              </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">優先度</label>
+              <Segmented
+                options={PRIORITIES.map((p) => ({ key: p.key, label: p.label }))}
+                value={priority}
+                onChange={(v) => setPriority(v as Task["priority"])}
+              />
+            </div>
+            <div>
+              <label className="label">ステータス</label>
+              <Segmented
+                options={STATUSES.map((s) => ({ key: s.key, label: s.label }))}
+                value={status}
+                onChange={(v) => setStatus(v as Task["status"])}
+                small
+              />
             </div>
           </div>
 

@@ -8,7 +8,6 @@ import { CATEGORIES, PROJECT_COLORS } from "@/lib/types";
 import { daysUntil, isStalled } from "@/lib/format";
 import { createProject, deleteProject, updateProject } from "@/lib/actions";
 import { TaskRow } from "./TaskCard";
-import { AddTaskButton } from "./AddTaskButton";
 import { Avatar, CategoryBadge, EmptyState } from "./ui";
 
 /** 期限が近い順。同じ日なら優先度の高い方が上 */
@@ -57,8 +56,6 @@ export function ProjectAccordion({
   members: Member[];
   goals: Goal[];
 }) {
-  const [openId, setOpenId] = useState<string | null>(null);
-
   const summaries = useMemo(
     () => projects.map((p) => summarize(p, tasks, members)),
     [projects, tasks, members],
@@ -86,10 +83,7 @@ export function ProjectAccordion({
         <ProjectCard
           key={s.project.id}
           summary={s}
-          members={members}
           goals={goals}
-          expanded={openId === s.project.id}
-          onToggle={() => setOpenId(openId === s.project.id ? null : s.project.id)}
         />
       ))}
 
@@ -102,27 +96,18 @@ export function ProjectAccordion({
 
 function ProjectCard({
   summary,
-  members,
   goals,
-  expanded,
-  onToggle,
 }: {
   summary: ProjectSummary;
-  members: Member[];
   goals: Goal[];
-  expanded: boolean;
-  onToggle: () => void;
 }) {
   const { project, open, done, owners, overdue, stalled } = summary;
-  const [showDone, setShowDone] = useState(false);
   const goal = goals.find((g) => g.id === project.goal_id);
 
   return (
-    <div className="card overflow-hidden">
-      <button
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-stone-50"
+    <Link
+      href={`/projects/${project.id}`}
+      className="card flex min-h-24 w-full items-center gap-3 px-4 py-3 text-left transition hover:border-line-strong hover:bg-stone-50 hover:shadow-sm"
       >
         <span
           className="size-2.5 shrink-0 rounded-full"
@@ -162,55 +147,8 @@ function ProjectCard({
           ))}
         </span>
 
-        <span className={`shrink-0 text-ink-mute transition ${expanded ? "rotate-90" : ""}`}>›</span>
-      </button>
-
-      {expanded && (
-        <div className="border-t border-line bg-stone-50/60 px-2 py-2">
-          {open.length === 0 ? (
-            <p className="px-2 py-4 text-center text-xs text-ink-mute">
-              このプロジェクトの手持ちはゼロです。次にやることが決まったら足してください。
-            </p>
-          ) : (
-            <div className="divide-y divide-line">
-              {open.map((t) => (
-                <TaskRow key={t.id} task={t} members={members} />
-              ))}
-            </div>
-          )}
-
-          <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
-            <AddTaskButton
-              label="＋ タスクを追加"
-              defaults={{ project_id: project.id, category: project.category, goal_id: project.goal_id }}
-            />
-            {done.length > 0 && (
-              <button
-                onClick={() => setShowDone((v) => !v)}
-                className="rounded-lg px-2 py-0.5 text-[11px] text-ink-mute hover:bg-stone-200/60"
-              >
-                {showDone ? "完了したものを隠す" : `完了したもの ${done.length}件を見る`}
-              </button>
-            )}
-            <span className="grow" />
-            <Link
-              href={`/projects/${project.id}`}
-              className="rounded-lg px-2 py-0.5 text-[11px] font-semibold text-brand hover:bg-brand-soft"
-            >
-              プロジェクトを開く →
-            </Link>
-          </div>
-
-          {showDone && done.length > 0 && (
-            <div className="mt-2 divide-y divide-line border-t border-line pt-1 opacity-70">
-              {done.map((t) => (
-                <TaskRow key={t.id} task={t} members={members} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+        <span className="shrink-0 text-lg text-ink-mute" aria-hidden>›</span>
+    </Link>
   );
 }
 

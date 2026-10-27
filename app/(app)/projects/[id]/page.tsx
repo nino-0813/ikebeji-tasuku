@@ -5,7 +5,7 @@ import { daysUntil, isStalled } from "@/lib/format";
 import { goalStats } from "@/lib/goal";
 import { formatValue } from "@/lib/format";
 import { ProjectSettings } from "@/components/ProjectParts";
-import { ProjectTaskList } from "@/components/ProjectTaskList";
+import { ProjectTimeline } from "@/components/ProjectTimeline";
 import { AddTaskButton } from "@/components/AddTaskButton";
 import { Avatar, CategoryBadge } from "@/components/ui";
 
@@ -106,11 +106,11 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </Link>
       )}
 
-      <section>
+      <section className="space-y-4">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-sm font-bold">やること</h2>
-            <span className="tnum text-xs text-ink-mute">{open.length}件</span>
+            <h2 className="text-sm font-bold">工程表</h2>
+            <span className="tnum text-xs text-ink-mute">全{mine.length}件</span>
           </div>
           <span className="grow" />
           <AddTaskButton
@@ -124,7 +124,12 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           />
         </div>
 
-        <ProjectTaskList open={open} done={done} members={members} />
+        <ProjectTimeline
+          tasks={[...open, ...done].sort((a, b) =>
+            (a.start_date || a.created_at.slice(0, 10)).localeCompare(b.start_date || b.created_at.slice(0, 10)),
+          )}
+          members={members}
+        />
       </section>
     </div>
   );
