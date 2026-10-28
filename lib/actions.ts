@@ -187,6 +187,43 @@ export async function updateTask(
   return {};
 }
 
+/**
+ * タスクを別ページへ移す。ページ固有のプロジェクト・目標・打ち合わせは解除し、
+ * コメント・サブタスク・添付ファイルはタスクに紐づいたまま保持する。
+ */
+export async function moveTaskToWorkspace(
+  id: string,
+  workspaceId: string,
+  ownerId: string,
+): Promise<{ error?: string }> {
+  const [{ data: workspace, error: workspaceError }, { data: membership, error: memberError }] =
+    await Promise.all([
+      db.from("tm_workspaces").select("id").eq("id", workspaceId).maybeSingle(),
+      db
+        .from("tm_workspace_members")
+        .select("member_id")
+        .eq("workspace_id", workspaceId)
+        .eq("member_id", ownerId)
+        .maybeSingle(),
+    ]);
+  if (workspaceError || !workspace) return { error: "移動先のページが見つかりません。" };
+  if (memberError || !membership) return { error: "担当者は移動先ページのメンバーから選んでください。" };
+
+  const { error } = await db
+    .from("tm_tasks")
+    .update({
+      workspace_id: workspaceId,
+      owner_id: ownerId,
+      project_id: null,
+      goal_id: null,
+      meeting_id: null,
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  return {};
+}
+
 /** ボードのドラッグ＆ドロップ。列と並び順をまとめて確定させる */
 export async function moveTask(
   id: string,

@@ -2,10 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Comment, Goal, Member, Project, Subtask, Task, TaskAttachment } from "@/lib/types";
+import type { Comment, Goal, Member, Project, Subtask, Task, TaskAttachment, Workspace } from "@/lib/types";
 import { CATEGORIES, PRIORITIES, STATUSES } from "@/lib/types";
 import { addDaysISO, formatDateLong, todayISO } from "@/lib/format";
-import { addComment, addSubtask, createTask, deleteInboxItem, deleteSubtask, deleteTask, toggleSubtask, updateTask } from "@/lib/actions";
+import { addComment, addSubtask, createTask, deleteInboxItem, deleteSubtask, deleteTask, moveTaskToWorkspace, toggleSubtask, updateTask } from "@/lib/actions";
 import { Avatar } from "./ui";
 
 export type NewTaskDefaults = {
@@ -28,6 +28,8 @@ type Ctx = {
   goals: Goal[];
   projects: Project[];
   me: Member | null;
+  workspaces: Workspace[];
+  currentWorkspace: Workspace | null;
 };
 
 const TaskUIContext = createContext<Ctx | null>(null);
@@ -43,12 +45,16 @@ export function TaskUIProvider({
   goals,
   projects,
   me,
+  workspaces,
+  currentWorkspace,
   children,
 }: {
   members: Member[];
   goals: Goal[];
   projects: Project[];
   me: Member | null;
+  workspaces: Workspace[];
+  currentWorkspace: Workspace | null;
   children: React.ReactNode;
 }) {
   const [editing, setEditing] = useState<Task | null>(null);
@@ -84,8 +90,8 @@ export function TaskUIProvider({
   }, [openNew]);
 
   const value = useMemo(
-    () => ({ openNew, openTask, members, goals, projects, me }),
-    [openNew, openTask, members, goals, projects, me],
+    () => ({ openNew, openTask, members, goals, projects, me, workspaces, currentWorkspace }),
+    [openNew, openTask, members, goals, projects, me, workspaces, currentWorkspace],
   );
 
   return (
@@ -100,6 +106,8 @@ export function TaskUIProvider({
           goals={goals}
           projects={projects}
           me={me}
+          workspaces={workspaces}
+          currentWorkspace={currentWorkspace}
           onClose={close}
         />
       )}
@@ -116,6 +124,8 @@ function TaskDialog({
   goals,
   projects,
   me,
+  workspaces,
+  currentWorkspace,
   onClose,
 }: {
   task: Task | null;
@@ -124,6 +134,8 @@ function TaskDialog({
   goals: Goal[];
   projects: Project[];
   me: Member | null;
+  workspaces: Workspace[];
+  currentWorkspace: Workspace | null;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -147,6 +159,9 @@ function TaskDialog({
   const [projectId, setProjectId] = useState(task?.project_id ?? defaults?.project_id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [destinationId, setDestinationId] = useState("");
+  const [destinationOwnerId, setDestinationOwnerId] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   useEffect(() => {
@@ -228,6 +243,37 @@ function TaskDialog({
     setSaving(false);
     if (res.error) {
       setError(res.error);
+      return;
+    }
+    router.refresh();
+    onClose();
+  }
+
+  const destination = workspaces.find((workspace) => workspace.id === destinationId);
+
+  function chooseDestination(workspaceId: string) {
+    setDestinationId(workspaceId);
+    const workspace = workspaces.find((item) => item.id === workspaceId);
+    if (!workspace) {
+      setDestinationOwnerId("");
+      return;
+    }
+    setDestinationOwnerId(
+      workspace.members.some((member) => member.id === ownerId)
+        ? ownerId
+        : (workspace.members[0]?.id ?? ""),
+    );
+  }
+
+  async function moveToWorkspace() {
+    if (!activeTaskId || !destination || !destinationOwnerId) return;
+    if (!confirm(`「${title}」を「${destination.name}」へ移動しますか？\nプロジェクト・目標・打ち合わせの設定は解除されます。`)) return;
+    setMoving(true);
+    setError(null);
+    const result = await moveTaskToWorkspace(activeTaskId, destination.id, destinationOwnerId);
+    setMoving(false);
+    if (result.error) {
+      setError(result.error);
       return;
     }
     router.refresh();
@@ -450,6 +496,40 @@ function TaskDialog({
 
           {activeTaskId && <SubtaskList taskId={activeTaskId} />}
           {activeTaskId && <CommentThread taskId={activeTaskId} members={members} me={me} />}
+
+          {activeTaskId && workspaces.some((workspace) => workspace.id !== currentWorkspace?.id) && (
+            <section className="rounded-xl border border-line bg-stone-50/70 p-4" aria-labelledby="task-move-heading">
+              <div>
+                <h3 id="task-move-heading" className="text-xs font-bold text-ink">別のページへ移動</h3>
+                <p className="mt-1 text-[11px] leading-relaxed text-ink-mute">
+                  コメント・サブタスク・添付ファイルはそのまま移動します。移動先にないプロジェクトなどの紐付けは解除されます。
+                </p>
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="task-destination">移動先のページ</label>
+                  <select id="task-destination" className="field" value={destinationId} onChange={(event) => chooseDestination(event.target.value)}>
+                    <option value="">— 移動先を選ぶ —</option>
+                    {workspaces.filter((workspace) => workspace.id !== currentWorkspace?.id).map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label" htmlFor="task-destination-owner">移動後の担当者</label>
+                  <select id="task-destination-owner" className="field" value={destinationOwnerId} disabled={!destination} onChange={(event) => setDestinationOwnerId(event.target.value)}>
+                    <option value="">— 担当者を選ぶ —</option>
+                    {destination?.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button type="button" disabled={!destination || !destinationOwnerId || moving} onClick={moveToWorkspace} className="min-h-11 rounded-lg border border-line-strong bg-white px-4 text-xs font-bold text-ink-soft transition enabled:hover:border-brand enabled:hover:text-brand disabled:cursor-not-allowed disabled:opacity-40">
+                  {moving ? "移動中…" : "このページへ移動"}
+                </button>
+              </div>
+            </section>
+          )}
 
           {error && (
             <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">

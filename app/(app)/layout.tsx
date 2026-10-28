@@ -18,7 +18,14 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   ]);
 
   return (
-    <TaskUIProvider members={members} goals={goals} projects={projects} me={me}>
+    <TaskUIProvider
+      members={members}
+      goals={goals}
+      projects={projects}
+      me={me}
+      workspaces={workspaces}
+      currentWorkspace={currentWorkspace}
+    >
       <div className="app-shell">
         <Nav members={allMembers} me={me} workspaces={workspaces} currentWorkspace={currentWorkspace} />
         <main id="main-content" className="app-main">
