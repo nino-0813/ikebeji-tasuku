@@ -74,6 +74,7 @@ export type Project = {
   contract_amount: number;
   invoiced_amount: number;
   paid_amount: number;
+  maintenance_monthly_fee: number;
   payment_due_date: string | null;
   category: Category;
   goal_id: string | null;

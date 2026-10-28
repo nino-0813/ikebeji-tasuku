@@ -389,6 +389,7 @@ export type ProjectInput = {
   contract_amount?: number;
   invoiced_amount?: number;
   paid_amount?: number;
+  maintenance_monthly_fee?: number;
   payment_due_date?: string | null;
 };
 
@@ -437,7 +438,7 @@ export async function updateProject(
   for (const key of ["client_name", "client_contact_name", "client_email", "client_phone", "client_website", "payment_due_date"]) {
     if (typeof clean[key] === "string") clean[key] = (clean[key] as string).trim() || null;
   }
-  for (const key of ["contract_amount", "invoiced_amount", "paid_amount"]) {
+  for (const key of ["contract_amount", "invoiced_amount", "paid_amount", "maintenance_monthly_fee"]) {
     if (clean[key] !== undefined) clean[key] = Math.max(0, Number(clean[key]) || 0);
   }
   if (clean.goal_id === "") clean.goal_id = null;

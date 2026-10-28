@@ -78,10 +78,11 @@ export function ProjectDashboard({ project, tasks }: { project: Project; tasks: 
               {unpaid > 0 ? `未入金 ${yen(unpaid)}` : "請求分は入金済み"}
             </span>
           </div>
-          <dl className="mt-5 grid grid-cols-3 gap-3">
+          <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Money label="契約金額" value={project.contract_amount} />
             <Money label="請求済み" value={project.invoiced_amount} />
             <Money label="入金済み" value={project.paid_amount} strong />
+            <Money label="保守管理 / 月" value={project.maintenance_monthly_fee} recurring />
           </dl>
           <div className="mt-5">
             <div className="mb-2 flex items-center justify-between text-[11px] text-ink-mute">
@@ -108,8 +109,8 @@ function Info({ label, value, href, external }: { label: string; value: string; 
   return <div><dt className="text-[10px] font-semibold text-ink-mute">{label}</dt><dd className="mt-1 break-words text-xs font-medium text-ink">{href ? <a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} className="text-brand underline-offset-2 hover:underline">{value}</a> : value}</dd></div>;
 }
 
-function Money({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
-  return <div><dt className="text-[10px] font-semibold text-ink-mute">{label}</dt><dd className={`tnum mt-1 text-sm ${strong ? "font-bold text-brand" : "font-semibold text-ink"}`}>{yen(value)}</dd></div>;
+function Money({ label, value, strong, recurring }: { label: string; value: number; strong?: boolean; recurring?: boolean }) {
+  return <div><dt className="text-[10px] font-semibold text-ink-mute">{label}</dt><dd className={`tnum mt-1 text-sm ${strong ? "font-bold text-brand" : recurring ? "font-bold text-blue-700" : "font-semibold text-ink"}`}>{yen(value)}{recurring && value > 0 ? <span className="ml-1 text-[10px] font-medium">/ 月</span> : null}</dd></div>;
 }
 
 function EmptyInfo({ text }: { text: string }) {

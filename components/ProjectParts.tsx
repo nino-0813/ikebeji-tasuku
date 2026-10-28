@@ -337,6 +337,7 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
   const [contractAmount, setContractAmount] = useState(String(project.contract_amount || ""));
   const [invoicedAmount, setInvoicedAmount] = useState(String(project.invoiced_amount || ""));
   const [paidAmount, setPaidAmount] = useState(String(project.paid_amount || ""));
+  const [maintenanceMonthlyFee, setMaintenanceMonthlyFee] = useState(String(project.maintenance_monthly_fee || ""));
   const [paymentDueDate, setPaymentDueDate] = useState(project.payment_due_date ?? "");
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
@@ -417,10 +418,11 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
       </fieldset>
       <fieldset className="space-y-3 rounded-xl border border-line bg-stone-50/60 p-4">
         <legend className="px-1 text-xs font-bold text-ink">契約・入金情報</legend>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div><label className="label">契約金額</label><input type="number" min="0" inputMode="numeric" className="field tnum" value={contractAmount} onChange={(e) => setContractAmount(e.target.value)} placeholder="0" /></div>
           <div><label className="label">請求済み金額</label><input type="number" min="0" inputMode="numeric" className="field tnum" value={invoicedAmount} onChange={(e) => setInvoicedAmount(e.target.value)} placeholder="0" /></div>
           <div><label className="label">入金済み金額</label><input type="number" min="0" inputMode="numeric" className="field tnum" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder="0" /></div>
+          <div><label className="label">保守管理（月額）</label><input type="number" min="0" inputMode="numeric" className="field tnum" value={maintenanceMonthlyFee} onChange={(e) => setMaintenanceMonthlyFee(e.target.value)} placeholder="0" /></div>
           <div><label className="label">入金期日</label><input type="date" className="field tnum" value={paymentDueDate} onChange={(e) => setPaymentDueDate(e.target.value)} /></div>
         </div>
         <p className="text-[10px] text-ink-mute">金額は税込・税抜のどちらかに運用を統一してください。</p>
@@ -473,6 +475,7 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
                 contract_amount: Number(contractAmount) || 0,
                 invoiced_amount: Number(invoicedAmount) || 0,
                 paid_amount: Number(paidAmount) || 0,
+                maintenance_monthly_fee: Number(maintenanceMonthlyFee) || 0,
                 payment_due_date: paymentDueDate || null,
               });
               if (result.error) { setError(result.error); return; }

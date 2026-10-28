@@ -95,6 +95,7 @@ alter table tm_projects add column if not exists client_website text;
 alter table tm_projects add column if not exists contract_amount numeric not null default 0;
 alter table tm_projects add column if not exists invoiced_amount numeric not null default 0;
 alter table tm_projects add column if not exists paid_amount numeric not null default 0;
+alter table tm_projects add column if not exists maintenance_monthly_fee numeric not null default 0;
 alter table tm_projects add column if not exists payment_due_date date;
 
 -- ---------- 打ち合わせ ----------
