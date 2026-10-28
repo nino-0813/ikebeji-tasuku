@@ -86,6 +86,13 @@ create table if not exists tm_projects (
 create index if not exists tm_projects_goal_idx  on tm_projects(goal_id);
 create index if not exists tm_projects_order_idx on tm_projects(archived, sort_order);
 
+alter table tm_projects add column if not exists phase text not null default 'production';
+do $$ begin
+  alter table tm_projects add constraint tm_projects_phase_check
+    check (phase in ('sales','production','maintenance'));
+exception when duplicate_object then null; end $$;
+create index if not exists tm_projects_phase_idx on tm_projects(workspace_id, phase, sort_order);
+
 -- Web制作案件の顧客・収支情報
 alter table tm_projects add column if not exists client_name text;
 alter table tm_projects add column if not exists client_contact_name text;

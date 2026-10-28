@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Goal, Member, Project, Task } from "@/lib/types";
-import { CATEGORIES, PROJECT_COLORS } from "@/lib/types";
+import { CATEGORIES, PROJECT_COLORS, PROJECT_PHASES } from "@/lib/types";
 import { daysUntil, isStalled } from "@/lib/format";
 import { createProject, deleteProject, updateProject } from "@/lib/actions";
 import { TaskRow } from "./TaskCard";
@@ -78,14 +78,29 @@ export function ProjectAccordion({
   }
 
   return (
-    <div className="space-y-2">
-      {summaries.map((s) => (
-        <ProjectCard
-          key={s.project.id}
-          summary={s}
-          goals={goals}
-        />
-      ))}
+    <div className="space-y-6">
+      {PROJECT_PHASES.map((phase) => {
+        const grouped = summaries.filter((summary) => summary.project.phase === phase.key);
+        const tone = phase.key === "sales" ? "bg-amber-500" : phase.key === "production" ? "bg-blue-600" : "bg-green-600";
+        return (
+          <section key={phase.key} aria-labelledby={`phase-${phase.key}`}>
+            <div className="mb-2 flex items-center gap-2">
+              <span className={`size-2.5 rounded-full ${tone}`} aria-hidden />
+              <h2 id={`phase-${phase.key}`} className="text-sm font-bold text-ink">{phase.label}</h2>
+              <span className="tnum rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-ink-mute">{grouped.length}件</span>
+              <span className="hidden text-[11px] text-ink-mute sm:inline">{phase.hint}</span>
+            </div>
+            <div className="space-y-2">
+              {grouped.map((summary) => <ProjectCard key={summary.project.id} summary={summary} goals={goals} />)}
+              {grouped.length === 0 && (
+                <div className="rounded-xl border border-dashed border-line-strong px-4 py-5 text-center text-xs text-ink-mute">
+                  {phase.label}のプロジェクトはありません
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      })}
 
       {orphans.length > 0 && (
         <OrphanCard tasks={orphans} members={members} projects={projects} />
@@ -210,6 +225,7 @@ export function NewProjectButton({
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<Project["category"]>("marketing");
+  const [phase, setPhase] = useState<Project["phase"]>("sales");
   const [goalId, setGoalId] = useState(defaultGoalId ?? "");
   const [color, setColor] = useState(PROJECT_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
@@ -239,7 +255,13 @@ export function NewProjectButton({
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className="label">進行区分</label>
+          <select className="field" value={phase} onChange={(e) => setPhase(e.target.value as Project["phase"])}>
+            {PROJECT_PHASES.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select>
+        </div>
         <div>
           <label className="label">領域</label>
           <select
@@ -304,7 +326,7 @@ export function NewProjectButton({
           onClick={() =>
             start(async () => {
               setError(null);
-              const res = await createProject({ title, category, goal_id: goalId || null, color });
+              const res = await createProject({ title, phase, category, goal_id: goalId || null, color });
               if (res.error) return setError(res.error);
               setOpen(false);
               setTitle("");
@@ -326,6 +348,7 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(project.title);
+  const [phase, setPhase] = useState(project.phase);
   const [detail, setDetail] = useState(project.detail ?? "");
   const [goalId, setGoalId] = useState(project.goal_id ?? "");
   const [color, setColor] = useState(project.color);
@@ -396,6 +419,14 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
       <div>
         <label className="label">プロジェクト名</label>
         <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
+      </div>
+      <div>
+        <label className="label">進行区分</label>
+        <select className="field" value={phase} onChange={(e) => setPhase(e.target.value as Project["phase"])}>
+          {PROJECT_PHASES.map((item) => (
+            <option key={item.key} value={item.key}>{item.label} — {item.hint}</option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="label">プロジェクト概要</label>
@@ -469,7 +500,7 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
             start(async () => {
               setError(null);
               const result = await updateProject(project.id, {
-                title, detail, goal_id: goalId || null, color,
+                title, phase, detail, goal_id: goalId || null, color,
                 client_name: clientName, client_contact_name: clientContactName,
                 client_email: clientEmail, client_phone: clientPhone, client_website: clientWebsite,
                 contract_amount: Number(contractAmount) || 0,

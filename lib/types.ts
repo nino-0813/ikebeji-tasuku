@@ -2,6 +2,7 @@ export type Category = "marketing" | "system";
 export type Status = "todo" | "doing" | "waiting" | "done";
 export type Priority = "high" | "mid" | "low";
 export type Horizon = "long" | "short";
+export type ProjectPhase = "sales" | "production" | "maintenance";
 
 export type Member = {
   id: string;
@@ -65,6 +66,7 @@ export type Project = {
   id: string;
   workspace_id: string;
   title: string;
+  phase: ProjectPhase;
   detail: string | null;
   client_name: string | null;
   client_contact_name: string | null;
@@ -178,4 +180,10 @@ export const PROJECT_COLORS = [
   "#0891b2",
   "#65a30d",
   "#dc2626",
+];
+
+export const PROJECT_PHASES: { key: ProjectPhase; label: string; hint: string }[] = [
+  { key: "sales", label: "商談中", hint: "提案・見積もり・契約前の案件" },
+  { key: "production", label: "製作中", hint: "受注後、納品に向けて進めている案件" },
+  { key: "maintenance", label: "保守管理", hint: "公開後の運用・更新・月額保守の案件" },
 ];

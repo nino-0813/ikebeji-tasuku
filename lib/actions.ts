@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "./supabase";
 import { getActiveWorkspaceId, ME_COOKIE, WORKSPACE_COOKIE } from "./data";
 import { AUTH_COOKIE, authToken } from "./auth";
-import type { Category, Horizon, Priority, Status } from "./types";
+import type { Category, Horizon, Priority, ProjectPhase, Status } from "./types";
 
 function refresh() {
   revalidatePath("/", "layout");
@@ -377,6 +377,7 @@ export async function deleteMeeting(id: string) {
 
 export type ProjectInput = {
   title: string;
+  phase?: ProjectPhase;
   detail?: string | null;
   category: Category;
   goal_id?: string | null;
@@ -411,6 +412,7 @@ export async function createProject(input: ProjectInput): Promise<{ error?: stri
     .from("tm_projects")
     .insert({
       title: input.title.trim(),
+      phase: input.phase ?? "production",
       workspace_id: workspaceId,
       detail: input.detail?.trim() || null,
       category: input.category,
