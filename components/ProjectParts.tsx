@@ -65,11 +65,13 @@ export function ProjectAccordion({
   tasks,
   members,
   goals,
+  boardMode = false,
 }: {
   projects: Project[];
   tasks: Task[];
   members: Member[];
   goals: Goal[];
+  boardMode?: boolean;
 }) {
   const router = useRouter();
   const [phaseOverrides, setPhaseOverrides] = useState<Record<string, ProjectPhase>>({});
@@ -132,6 +134,17 @@ export function ProjectAccordion({
         <br />
         しばらく続く塊で1つ作ってみてください。中のタスクが全部終わっても消えません。
       </EmptyState>
+    );
+  }
+
+  if (!boardMode) {
+    return (
+      <div className="space-y-2">
+        {summaries.map((summary) => (
+          <ProjectCard key={summary.project.id} summary={summary} goals={goals} />
+        ))}
+        {orphans.length > 0 && <OrphanCard tasks={orphans} members={members} projects={projects} />}
+      </div>
     );
   }
 

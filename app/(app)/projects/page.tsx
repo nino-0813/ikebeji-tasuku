@@ -1,14 +1,15 @@
-import { getGoals, getProjects, getTasks, getWorkspaceMembers } from "@/lib/data";
+import { getCurrentWorkspace, getGoals, getProjects, getTasks, getWorkspaceMembers } from "@/lib/data";
 import { ProjectAccordion, NewProjectButton } from "@/components/ProjectParts";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsPage() {
-  const [projects, tasks, members, goals] = await Promise.all([
+  const [projects, tasks, members, goals, currentWorkspace] = await Promise.all([
     getProjects(),
     getTasks(),
     getWorkspaceMembers(),
     getGoals(),
+    getCurrentWorkspace(),
   ]);
 
   return (
@@ -23,7 +24,13 @@ export default async function ProjectsPage() {
         <NewProjectButton goals={goals} />
       </div>
 
-      <ProjectAccordion projects={projects} tasks={tasks} members={members} goals={goals} />
+      <ProjectAccordion
+        projects={projects}
+        tasks={tasks}
+        members={members}
+        goals={goals}
+        boardMode={currentWorkspace?.name.trim().toLowerCase() === "with dock"}
+      />
     </div>
   );
 }
