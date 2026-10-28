@@ -131,9 +131,10 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </div>
 
         <ProjectTimeline
-          tasks={[...open, ...done].sort((a, b) =>
-            (a.start_date || a.created_at.slice(0, 10)).localeCompare(b.start_date || b.created_at.slice(0, 10)),
-          )}
+          tasks={[
+            ...open.sort((a, b) => a.due_date.localeCompare(b.due_date) || a.start_date.localeCompare(b.start_date)),
+            ...done.sort((a, b) => (b.done_at ?? b.updated_at).localeCompare(a.done_at ?? a.updated_at)),
+          ]}
           members={members}
         />
       </section>

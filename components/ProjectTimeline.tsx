@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { Fragment, type CSSProperties } from "react";
 import type { Member, Status, Task } from "@/lib/types";
 import { STATUSES } from "@/lib/types";
 import { formatDate, todayISO } from "@/lib/format";
@@ -52,9 +52,20 @@ export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Me
   const days = rangeDays(rangeStart, rangeEnd);
   const timelineWidth = Math.max(680, days.length * 28);
   const todayOffset = offset(today, rangeStart);
+  const openCount = tasks.filter((task) => task.status !== "done").length;
+  const doneCount = tasks.length - openCount;
 
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2" aria-label="工程の集計">
+        <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+          これから・進行中 {openCount}件
+        </span>
+        <span className="rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-bold text-green-700">
+          完了 {doneCount}件
+        </span>
+        <span className="ml-auto text-[11px] text-ink-mute">未完了は期日の近い順です</span>
+      </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-ink-mute" aria-label="ステータス凡例">
         {STATUSES.map((status) => (
           <span key={status.key} className="flex items-center gap-1.5">
@@ -92,7 +103,7 @@ export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Me
             </div>
           </div>
 
-          {tasks.map((task) => {
+          {tasks.map((task, index) => {
             const owner = members.find((member) => member.id === task.owner_id);
             const start = task.start_date || task.created_at.slice(0, 10);
             const startOffset = Math.max(0, offset(start, rangeStart));
@@ -103,12 +114,25 @@ export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Me
               background: STATUS_COLOR[task.status],
             };
 
+            const beginsDoneSection = task.status === "done" && (index === 0 || tasks[index - 1].status !== "done");
+
             return (
-              <div key={task.id} className="group flex min-h-16 border-b border-line last:border-b-0">
+              <Fragment key={task.id}>
+              {beginsDoneSection && (
+                <div className="flex h-10 border-b border-line bg-green-50/70" role="separator" aria-label="完了した工程">
+                  <div className="sticky left-0 z-10 flex w-80 shrink-0 items-center gap-2 border-r border-green-100 bg-green-50 px-4 text-[11px] font-bold text-green-800">
+                    <span className="flex size-4 items-center justify-center rounded-full bg-green-700 text-[10px] text-white" aria-hidden>✓</span>
+                    完了した工程
+                    <span className="tnum font-medium text-green-700">{doneCount}件</span>
+                  </div>
+                  <div className="flex items-center px-4 text-[10px] text-green-700" style={{ width: timelineWidth }}>完了日は新しい順</div>
+                </div>
+              )}
+              <div className={`group flex min-h-16 border-b border-line last:border-b-0 ${task.status === "done" ? "bg-stone-50/60" : ""}`}>
                 <button
                   type="button"
                   onClick={() => openTask(task)}
-                  className="sticky left-0 z-10 flex w-80 shrink-0 items-center gap-3 border-r border-line bg-white px-4 py-2 text-left transition group-hover:bg-stone-50"
+                  className={`sticky left-0 z-10 flex w-80 shrink-0 items-center gap-3 border-r border-line px-4 py-2 text-left transition group-hover:bg-stone-50 ${task.status === "done" ? "bg-stone-50" : "bg-white"}`}
                 >
                   <Avatar member={owner} size={24} />
                   <span className="min-w-0 flex-1">
@@ -117,6 +141,9 @@ export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Me
                     </span>
                     <span className="tnum mt-0.5 block text-[10px] text-ink-mute">
                       {owner?.name ?? "担当未設定"} ・ {formatDate(start)} → {formatDate(task.due_date)}
+                    </span>
+                    <span className={`mt-1 inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${task.status === "done" ? "bg-green-100 text-green-700" : task.status === "doing" ? "bg-blue-50 text-blue-700" : task.status === "waiting" ? "bg-amber-50 text-amber-700" : "bg-stone-100 text-stone-600"}`}>
+                      {STATUSES.find((status) => status.key === task.status)?.label}
                     </span>
                   </span>
                   <span className="text-ink-mute" aria-hidden>›</span>
@@ -140,7 +167,7 @@ export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Me
                     type="button"
                     onClick={() => openTask(task)}
                     style={barStyle}
-                    className="absolute top-3 z-[2] h-9 min-w-7 overflow-hidden rounded-md px-2 text-left text-[10px] font-semibold text-white shadow-sm transition hover:brightness-110 focus-visible:z-10"
+                    className={`absolute top-3 z-[2] h-9 min-w-7 overflow-hidden rounded-md px-2 text-left text-[10px] font-semibold text-white shadow-sm transition hover:brightness-110 focus-visible:z-10 ${task.status === "done" ? "opacity-70" : ""}`}
                     aria-label={`${task.title}。${formatDate(start)}から${formatDate(task.due_date)}。詳細を開く`}
                     title={`${task.title}｜${formatDate(start)}〜${formatDate(task.due_date)}`}
                   >
@@ -148,6 +175,7 @@ export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Me
                   </button>
                 </div>
               </div>
+              </Fragment>
             );
           })}
         </div>
