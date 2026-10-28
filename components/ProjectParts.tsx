@@ -78,29 +78,36 @@ export function ProjectAccordion({
   }
 
   return (
-    <div className="space-y-6">
-      {PROJECT_PHASES.map((phase) => {
-        const grouped = summaries.filter((summary) => summary.project.phase === phase.key);
-        const tone = phase.key === "sales" ? "bg-amber-500" : phase.key === "production" ? "bg-blue-600" : "bg-green-600";
-        return (
-          <section key={phase.key} aria-labelledby={`phase-${phase.key}`}>
-            <div className="mb-2 flex items-center gap-2">
-              <span className={`size-2.5 rounded-full ${tone}`} aria-hidden />
-              <h2 id={`phase-${phase.key}`} className="text-sm font-bold text-ink">{phase.label}</h2>
-              <span className="tnum rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-ink-mute">{grouped.length}件</span>
-              <span className="hidden text-[11px] text-ink-mute sm:inline">{phase.hint}</span>
-            </div>
-            <div className="space-y-2">
-              {grouped.map((summary) => <ProjectCard key={summary.project.id} summary={summary} goals={goals} />)}
-              {grouped.length === 0 && (
-                <div className="rounded-xl border border-dashed border-line-strong px-4 py-5 text-center text-xs text-ink-mute">
-                  {phase.label}のプロジェクトはありません
+    <div className="space-y-4">
+      <div className="overflow-x-auto pb-2" role="region" aria-label="進行区分別のプロジェクト一覧" tabIndex={0}>
+        <div className="grid min-w-[900px] grid-cols-3 gap-4">
+          {PROJECT_PHASES.map((phase) => {
+            const grouped = summaries.filter((summary) => summary.project.phase === phase.key);
+            const tone = phase.key === "sales" ? "bg-amber-500" : phase.key === "production" ? "bg-blue-600" : "bg-green-600";
+            const surface = phase.key === "sales" ? "bg-amber-50/40" : phase.key === "production" ? "bg-blue-50/40" : "bg-green-50/40";
+            return (
+              <section key={phase.key} aria-labelledby={`phase-${phase.key}`} className={`min-h-[420px] rounded-xl border border-line p-3 ${surface}`}>
+                <div className="mb-3 border-b border-line pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`size-2.5 rounded-full ${tone}`} aria-hidden />
+                    <h2 id={`phase-${phase.key}`} className="text-sm font-bold text-ink">{phase.label}</h2>
+                    <span className="tnum ml-auto rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-ink-mute">{grouped.length}件</span>
+                  </div>
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-ink-mute">{phase.hint}</p>
                 </div>
-              )}
-            </div>
-          </section>
-        );
-      })}
+                <div className="space-y-2">
+                  {grouped.map((summary) => <ProjectCard key={summary.project.id} summary={summary} goals={goals} />)}
+                  {grouped.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-line-strong bg-white/70 px-4 py-8 text-center text-xs text-ink-mute">
+                      {phase.label}のプロジェクトはありません
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </div>
 
       {orphans.length > 0 && (
         <OrphanCard tasks={orphans} members={members} projects={projects} />
