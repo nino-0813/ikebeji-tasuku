@@ -66,6 +66,15 @@ export type Project = {
   workspace_id: string;
   title: string;
   detail: string | null;
+  client_name: string | null;
+  client_contact_name: string | null;
+  client_email: string | null;
+  client_phone: string | null;
+  client_website: string | null;
+  contract_amount: number;
+  invoiced_amount: number;
+  paid_amount: number;
+  payment_due_date: string | null;
   category: Category;
   goal_id: string | null;
   color: string;

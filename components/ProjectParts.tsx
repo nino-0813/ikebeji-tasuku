@@ -329,6 +329,16 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
   const [detail, setDetail] = useState(project.detail ?? "");
   const [goalId, setGoalId] = useState(project.goal_id ?? "");
   const [color, setColor] = useState(project.color);
+  const [clientName, setClientName] = useState(project.client_name ?? "");
+  const [clientContactName, setClientContactName] = useState(project.client_contact_name ?? "");
+  const [clientEmail, setClientEmail] = useState(project.client_email ?? "");
+  const [clientPhone, setClientPhone] = useState(project.client_phone ?? "");
+  const [clientWebsite, setClientWebsite] = useState(project.client_website ?? "");
+  const [contractAmount, setContractAmount] = useState(String(project.contract_amount || ""));
+  const [invoicedAmount, setInvoicedAmount] = useState(String(project.invoiced_amount || ""));
+  const [paidAmount, setPaidAmount] = useState(String(project.paid_amount || ""));
+  const [paymentDueDate, setPaymentDueDate] = useState(project.payment_due_date ?? "");
+  const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
 
   if (!editing) {
@@ -374,13 +384,20 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
   }
 
   return (
-    <div className="card w-full space-y-3 p-4">
+    <div className="card w-full space-y-5 p-5">
+      <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+        <div>
+          <p className="text-[11px] font-semibold tracking-wider text-ink-mute">PROJECT SETTINGS</p>
+          <h2 className="mt-1 text-sm font-bold">プロジェクト情報を編集</h2>
+        </div>
+        <button onClick={() => setEditing(false)} className="min-h-11 rounded-lg px-3 text-xs text-ink-mute hover:bg-stone-100">閉じる</button>
+      </div>
       <div>
         <label className="label">プロジェクト名</label>
         <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
       <div>
-        <label className="label">メモ（任意）</label>
+        <label className="label">プロジェクト概要</label>
         <textarea
           className="field min-h-20 resize-y"
           value={detail}
@@ -388,6 +405,26 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
           onChange={(e) => setDetail(e.target.value)}
         />
       </div>
+      <fieldset className="space-y-3 rounded-xl border border-line bg-stone-50/60 p-4">
+        <legend className="px-1 text-xs font-bold text-ink">クライアント情報</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div><label className="label">会社・屋号</label><input className="field" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="例）株式会社〇〇" /></div>
+          <div><label className="label">担当者名</label><input className="field" value={clientContactName} onChange={(e) => setClientContactName(e.target.value)} placeholder="例）山田 太郎" /></div>
+          <div><label className="label">メールアドレス</label><input type="email" className="field" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="contact@example.com" /></div>
+          <div><label className="label">電話番号</label><input type="tel" className="field" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="090-0000-0000" /></div>
+          <div className="sm:col-span-2"><label className="label">Webサイト</label><input type="url" className="field" value={clientWebsite} onChange={(e) => setClientWebsite(e.target.value)} placeholder="https://example.com" /></div>
+        </div>
+      </fieldset>
+      <fieldset className="space-y-3 rounded-xl border border-line bg-stone-50/60 p-4">
+        <legend className="px-1 text-xs font-bold text-ink">契約・入金情報</legend>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div><label className="label">契約金額</label><input type="number" min="0" inputMode="numeric" className="field tnum" value={contractAmount} onChange={(e) => setContractAmount(e.target.value)} placeholder="0" /></div>
+          <div><label className="label">請求済み金額</label><input type="number" min="0" inputMode="numeric" className="field tnum" value={invoicedAmount} onChange={(e) => setInvoicedAmount(e.target.value)} placeholder="0" /></div>
+          <div><label className="label">入金済み金額</label><input type="number" min="0" inputMode="numeric" className="field tnum" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder="0" /></div>
+          <div><label className="label">入金期日</label><input type="date" className="field tnum" value={paymentDueDate} onChange={(e) => setPaymentDueDate(e.target.value)} /></div>
+        </div>
+        <p className="text-[10px] text-ink-mute">金額は税込・税抜のどちらかに運用を統一してください。</p>
+      </fieldset>
       <div>
         <label className="label">ひもづく目標</label>
         <select className="field" value={goalId} onChange={(e) => setGoalId(e.target.value)}>
@@ -417,6 +454,7 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
           ))}
         </div>
       </div>
+      {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
       <div className="flex justify-end gap-2">
         <button
           onClick={() => setEditing(false)}
@@ -427,7 +465,17 @@ export function ProjectSettings({ project, goals }: { project: Project; goals: G
         <button
           onClick={() =>
             start(async () => {
-              await updateProject(project.id, { title, detail, goal_id: goalId || null, color });
+              setError(null);
+              const result = await updateProject(project.id, {
+                title, detail, goal_id: goalId || null, color,
+                client_name: clientName, client_contact_name: clientContactName,
+                client_email: clientEmail, client_phone: clientPhone, client_website: clientWebsite,
+                contract_amount: Number(contractAmount) || 0,
+                invoiced_amount: Number(invoicedAmount) || 0,
+                paid_amount: Number(paidAmount) || 0,
+                payment_due_date: paymentDueDate || null,
+              });
+              if (result.error) { setError(result.error); return; }
               setEditing(false);
               router.refresh();
             })

@@ -86,6 +86,17 @@ create table if not exists tm_projects (
 create index if not exists tm_projects_goal_idx  on tm_projects(goal_id);
 create index if not exists tm_projects_order_idx on tm_projects(archived, sort_order);
 
+-- Web制作案件の顧客・収支情報
+alter table tm_projects add column if not exists client_name text;
+alter table tm_projects add column if not exists client_contact_name text;
+alter table tm_projects add column if not exists client_email text;
+alter table tm_projects add column if not exists client_phone text;
+alter table tm_projects add column if not exists client_website text;
+alter table tm_projects add column if not exists contract_amount numeric not null default 0;
+alter table tm_projects add column if not exists invoiced_amount numeric not null default 0;
+alter table tm_projects add column if not exists paid_amount numeric not null default 0;
+alter table tm_projects add column if not exists payment_due_date date;
+
 -- ---------- 打ち合わせ ----------
 create table if not exists tm_meetings (
   id         uuid primary key default gen_random_uuid(),

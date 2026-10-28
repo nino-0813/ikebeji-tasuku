@@ -6,6 +6,7 @@ import { goalStats } from "@/lib/goal";
 import { formatValue } from "@/lib/format";
 import { ProjectSettings } from "@/components/ProjectParts";
 import { ProjectTimeline } from "@/components/ProjectTimeline";
+import { ProjectDashboard } from "@/components/ProjectDashboard";
 import { AddTaskButton } from "@/components/AddTaskButton";
 import { Avatar, CategoryBadge } from "@/components/ui";
 
@@ -33,8 +34,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   return (
     <div className="space-y-7">
       <div>
-        <Link href="/" className="text-xs text-ink-mute hover:text-ink-soft">
-          ← ホーム
+        <Link href="/projects" className="text-xs text-ink-mute hover:text-ink-soft">
+          ← プロジェクト一覧
         </Link>
 
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
@@ -82,6 +83,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </div>
       </div>
 
+      <ProjectDashboard project={project} tasks={mine} />
+
       {goal && (
         <Link
           href="/goals"
@@ -109,7 +112,10 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       <section className="space-y-4">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-sm font-bold">工程表</h2>
+            <div>
+              <p className="text-[11px] font-semibold tracking-wider text-ink-mute">SCHEDULE</p>
+              <h2 className="mt-1 text-sm font-bold">制作工程</h2>
+            </div>
             <span className="tnum text-xs text-ink-mute">全{mine.length}件</span>
           </div>
           <span className="grow" />

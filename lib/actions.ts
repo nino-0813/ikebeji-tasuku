@@ -344,6 +344,15 @@ export type ProjectInput = {
   category: Category;
   goal_id?: string | null;
   color?: string;
+  client_name?: string | null;
+  client_contact_name?: string | null;
+  client_email?: string | null;
+  client_phone?: string | null;
+  client_website?: string | null;
+  contract_amount?: number;
+  invoiced_amount?: number;
+  paid_amount?: number;
+  payment_due_date?: string | null;
 };
 
 export async function createProject(input: ProjectInput): Promise<{ error?: string; id?: string }> {
@@ -388,6 +397,12 @@ export async function updateProject(
   const clean: Record<string, unknown> = { ...patch };
   if (typeof clean.title === "string") clean.title = clean.title.trim();
   if (typeof clean.detail === "string") clean.detail = clean.detail.trim() || null;
+  for (const key of ["client_name", "client_contact_name", "client_email", "client_phone", "client_website", "payment_due_date"]) {
+    if (typeof clean[key] === "string") clean[key] = (clean[key] as string).trim() || null;
+  }
+  for (const key of ["contract_amount", "invoiced_amount", "paid_amount"]) {
+    if (clean[key] !== undefined) clean[key] = Math.max(0, Number(clean[key]) || 0);
+  }
   if (clean.goal_id === "") clean.goal_id = null;
 
   const { error } = await db.from("tm_projects").update(clean).eq("id", id);
