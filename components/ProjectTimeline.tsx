@@ -1,9 +1,11 @@
 "use client";
 
-import { Fragment, type CSSProperties } from "react";
+import { Fragment, useState, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 import type { Member, Status, Task } from "@/lib/types";
 import { STATUSES } from "@/lib/types";
 import { formatDate, todayISO } from "@/lib/format";
+import { setTaskStatus } from "@/lib/actions";
 import { useTaskUI } from "./TaskUI";
 import { Avatar } from "./ui";
 
@@ -35,6 +37,22 @@ function offset(date: string, start: string) {
 
 export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Member[] }) {
   const { openTask } = useTaskUI();
+  const router = useRouter();
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  async function toggleDone(task: Task) {
+    if (updatingId) return;
+    setUpdatingId(task.id);
+    setStatusError(null);
+    const result = await setTaskStatus(task.id, task.status === "done" ? "todo" : "done");
+    setUpdatingId(null);
+    if (result.error) {
+      setStatusError(result.error);
+      return;
+    }
+    router.refresh();
+  }
 
   if (!tasks.length) {
     return (
@@ -66,6 +84,11 @@ export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Me
         </span>
         <span className="ml-auto text-[11px] text-ink-mute">未完了は期日の近い順です</span>
       </div>
+      {statusError && (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          ステータスを変更できませんでした：{statusError}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-ink-mute" aria-label="ステータス凡例">
         {STATUSES.map((status) => (
           <span key={status.key} className="flex items-center gap-1.5">
@@ -129,13 +152,19 @@ export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Me
                 </div>
               )}
               <div className={`group flex min-h-16 border-b border-line last:border-b-0 ${task.status === "done" ? "bg-stone-50/60" : ""}`}>
-                <button
-                  type="button"
-                  onClick={() => openTask(task)}
-                  className={`sticky left-0 z-10 flex w-80 shrink-0 items-center gap-3 border-r border-line px-4 py-2 text-left transition group-hover:bg-stone-50 ${task.status === "done" ? "bg-stone-50" : "bg-white"}`}
-                >
+                <div className={`sticky left-0 z-10 flex w-80 shrink-0 items-center gap-2 border-r border-line px-3 py-2 transition group-hover:bg-stone-50 ${task.status === "done" ? "bg-stone-50" : "bg-white"}`}>
+                  <button
+                    type="button"
+                    disabled={updatingId === task.id}
+                    onClick={() => void toggleDone(task)}
+                    className={`flex size-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-wait disabled:opacity-50 ${task.status === "done" ? "border-green-700 bg-green-700 text-white hover:bg-green-800" : "border-stone-300 bg-white text-transparent hover:border-green-600 hover:bg-green-50 hover:text-green-700"}`}
+                    aria-label={task.status === "done" ? `${task.title}を未着手に戻す` : `${task.title}を完了にする`}
+                    title={task.status === "done" ? "未着手に戻す" : "完了にする"}
+                  >
+                    {updatingId === task.id ? "…" : "✓"}
+                  </button>
                   <Avatar member={owner} size={24} />
-                  <span className="min-w-0 flex-1">
+                  <button type="button" onClick={() => openTask(task)} className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
                     <span className={`block truncate text-xs font-semibold ${task.status === "done" ? "text-ink-mute line-through" : "text-ink"}`}>
                       {task.title}
                     </span>
@@ -145,9 +174,9 @@ export function ProjectTimeline({ tasks, members }: { tasks: Task[]; members: Me
                     <span className={`mt-1 inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${task.status === "done" ? "bg-green-100 text-green-700" : task.status === "doing" ? "bg-blue-50 text-blue-700" : task.status === "waiting" ? "bg-amber-50 text-amber-700" : "bg-stone-100 text-stone-600"}`}>
                       {STATUSES.find((status) => status.key === task.status)?.label}
                     </span>
-                  </span>
+                  </button>
                   <span className="text-ink-mute" aria-hidden>›</span>
-                </button>
+                </div>
 
                 <div
                   className="relative min-h-16"
