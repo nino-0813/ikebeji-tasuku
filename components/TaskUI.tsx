@@ -184,6 +184,8 @@ function TaskDialog({
 
   const missing: string[] = [];
   if (!title.trim()) missing.push("タスク名");
+  const fromMeeting = isNew && Boolean(defaults?.candidate_id);
+  if (fromMeeting && !projectId) missing.push("プロジェクト");
   if (!ownerId) missing.push("担当者");
   if (!dueDate) missing.push("期限");
   if (startDate && dueDate && startDate > dueDate) missing.push("開始日と期限の順序");
@@ -328,6 +330,36 @@ function TaskDialog({
             />
           </div>
 
+          {(projects.length > 0 || fromMeeting) && (
+            <div>
+              <label htmlFor="task-project" className="label">登録先プロジェクト{fromMeeting && <Req />}</label>
+              <select
+                className="field"
+                id="task-project"
+                required={fromMeeting}
+                value={projectId}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setProjectId(next);
+                  // プロジェクトを選んだら、領域と目標もそれに合わせる
+                  const proj = projects.find((p) => p.id === next);
+                  if (proj) {
+                    setCategory(proj.category);
+                    if (fromMeeting || proj.goal_id) setGoalId(proj.goal_id || "");
+                  }
+                }}
+              >
+                <option value="">{fromMeeting ? "プロジェクトを選択" : "— プロジェクト未設定 —"}</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+              {fromMeeting && !projects.length && <p className="mt-2 text-sm">登録先がまだありません。<a className="text-brand underline" href="/projects" target="_blank" rel="noopener noreferrer">プロジェクトを作成</a>後、Inboxを再読み込みしてください。</p>}
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label">領域</label>
@@ -440,33 +472,6 @@ function TaskDialog({
               <p className="mt-1 text-[11px] text-amber-700">
                 ここを書いておくと、次の打ち合わせで「誰に何を催促するか」が一目でわかります。
               </p>
-            </div>
-          )}
-
-          {projects.length > 0 && (
-            <div>
-              <label className="label">プロジェクト（どの塊の中の作業か）</label>
-              <select
-                className="field"
-                value={projectId}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setProjectId(next);
-                  // プロジェクトを選んだら、領域と目標もそれに合わせる
-                  const proj = projects.find((p) => p.id === next);
-                  if (proj) {
-                    setCategory(proj.category);
-                    if (proj.goal_id) setGoalId(proj.goal_id);
-                  }
-                }}
-              >
-                <option value="">— プロジェクト未設定 —</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
             </div>
           )}
 

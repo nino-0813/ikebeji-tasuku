@@ -345,6 +345,10 @@ const reviewed = "候補の状態が変わりました。Inboxを再読み込み
 export async function promoteMeetingItem(id: string, input: TaskInput): Promise<{error?:string; id?:string}> {
   const invalid = validate(input);
   if (invalid) return {error:invalid};
+  if (!input.project_id || await getActiveWorkspaceId() !== WITH_DOCK_ID) return {error:"登録先のプロジェクトを選択してください。"};
+  const {data: project,error: projectError} = await db.from("tm_projects").select("id")
+    .eq("id",input.project_id).eq("workspace_id",WITH_DOCK_ID).eq("archived",false).maybeSingle();
+  if (projectError || !project) return {error:"登録先のプロジェクトを確認して、もう一度選んでください。"};
   const item = await claim(id,"creating",id);
   if (!item) return {error:reviewed};
   const result = await insertTask({...input, detail:[input.detail,sourceNote(item.source)].filter(Boolean).join("\n\n")},id);
