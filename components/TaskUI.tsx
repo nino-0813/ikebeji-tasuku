@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Comment, Goal, Member, Project, Subtask, Task, TaskAttachment, Workspace } from "@/lib/types";
 import { CATEGORIES, PRIORITIES, STATUSES } from "@/lib/types";
 import { addDaysISO, formatDateLong, todayISO } from "@/lib/format";
-import { addComment, addSubtask, createTask, promoteMeetingItem, deleteInboxItem, deleteSubtask, deleteTask, moveTaskToWorkspace, toggleSubtask, updateTask } from "@/lib/actions";
+import { addComment, addSubtask, createProject, createTask, promoteMeetingItem, deleteInboxItem, deleteSubtask, deleteTask, moveTaskToWorkspace, toggleSubtask, updateTask } from "@/lib/actions";
 import { Avatar } from "./ui";
 
 function MeetingReference({text}:{text:string}) {
@@ -25,6 +25,7 @@ export type NewTaskDefaults = {
   due_date?: string;
   inbox_id?: string;
   candidate_id?: string;
+  related_candidates?: string[];
 };
 
 type Ctx = {
@@ -163,6 +164,29 @@ function TaskDialog({
   const [waitingOn, setWaitingOn] = useState(task?.waiting_on ?? "");
   const [goalId, setGoalId] = useState(task?.goal_id ?? defaults?.goal_id ?? "");
   const [projectId, setProjectId] = useState(task?.project_id ?? defaults?.project_id ?? "");
+  const [addingProject, setAddingProject] = useState(false);
+  const [projectName, setProjectName] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [createdProject, setCreatedProject] = useState<{id:string; title:string} | null>(null);
+  async function addProject() {
+    const name = projectName.trim();
+    if (!name || creatingProject) return;
+    setCreatingProject(true);
+    setError(null);
+    try {
+      const existing = projects.find(p => p.title.trim() === name);
+      const result = existing || await createProject({title:name, category});
+      if (!result.id) { setError(("error" in result && result.error) || "作成できませんでした。"); return; }
+      setCreatedProject({id:result.id,title:name});
+      setProjectId(result.id);
+      setGoalId(existing?.goal_id || "");
+      if (existing) setCategory(existing.category);
+      setAddingProject(false);
+      setProjectName("");
+      router.refresh();
+    } catch { setError("プロジェクトを保存できませんでした。"); }
+    finally { setCreatingProject(false); }
+  }
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -189,7 +213,7 @@ function TaskDialog({
   if (!ownerId) missing.push("担当者");
   if (!dueDate) missing.push("期限");
   if (startDate && dueDate && startDate > dueDate) missing.push("開始日と期限の順序");
-  const canSave = missing.length === 0 && !saving;
+  const canSave = missing.length === 0 && !saving && !addingProject && !creatingProject;
 
   async function save() {
     if (!canSave) return;
@@ -212,11 +236,12 @@ function TaskDialog({
     let createdId: string | undefined;
     const res = activeTaskId
       ? await updateTask(activeTaskId, payload)
-      : await (defaults?.candidate_id ? promoteMeetingItem(defaults.candidate_id, payload) : createTask(payload)).then((result) => {
+      : await (defaults?.candidate_id ? promoteMeetingItem(defaults.candidate_id, payload, defaults.related_candidates) : createTask(payload)).then((result) => {
           createdId = result.id;
           return result;
         });
     if (res.error) {
+      if (createdId) { setActiveTaskId(createdId); router.refresh(); }
       setSaving(false);
       setError(res.error);
       return;
@@ -355,8 +380,14 @@ function TaskDialog({
                     {p.title}
                   </option>
                 ))}
+                {createdProject && !projects.some(p=>p.id===createdProject.id) && <option value={createdProject.id}>{createdProject.title}</option>}
               </select>
-              {fromMeeting && !projects.length && <p className="mt-2 text-sm">登録先がまだありません。<a className="text-brand underline" href="/projects" target="_blank" rel="noopener noreferrer">プロジェクトを作成</a>後、Inboxを再読み込みしてください。</p>}
+              {fromMeeting && (addingProject ? <div className="mt-2 space-y-2 rounded-lg border border-line p-3">
+                <label className="label" htmlFor="new-project-title">新規プロジェクト名</label>
+                <input id="new-project-title" autoFocus className="field" value={projectName} onChange={e=>setProjectName(e.target.value)}/>
+                <div className="flex gap-4 text-sm"><button disabled={creatingProject || !projectName.trim()} className="font-bold text-brand disabled:opacity-40" onClick={addProject}>作成して選択</button>
+                <button disabled={creatingProject} onClick={()=>setAddingProject(false)}>戻る</button></div>
+              </div> : <button className="mt-2 text-sm font-bold text-brand" onClick={()=>setAddingProject(true)}>＋ 新規プロジェクト</button>)}
             </div>
           )}
 

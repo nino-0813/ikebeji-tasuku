@@ -342,7 +342,7 @@ async function claim(id: string, action: "creating" | "linking", target: string)
 }
 const reviewed = "候補の状態が変わりました。Inboxを再読み込みしてください。";
 
-export async function promoteMeetingItem(id: string, input: TaskInput): Promise<{error?:string; id?:string}> {
+export async function promoteMeetingItem(id: string, input: TaskInput, related: string[] = []): Promise<{error?:string; id?:string}> {
   const invalid = validate(input);
   if (invalid) return {error:invalid};
   if (!input.project_id || await getActiveWorkspaceId() !== WITH_DOCK_ID) return {error:"登録先のプロジェクトを選択してください。"};
@@ -354,6 +354,14 @@ export async function promoteMeetingItem(id: string, input: TaskInput): Promise<
   const result = await insertTask({...input, detail:[input.detail,sourceNote(item.source)].filter(Boolean).join("\n\n")},id);
   if (result.error) return result;
   await transition(item,"closed",id);
+  for (const otherId of new Set(related)) {
+    if (otherId === id) continue;
+    const linked = await linkMeetingItem(otherId, id);
+    if (linked.error) {
+      refresh();
+      return {id, error:"タスクを登録しました。一部の候補を紐づけられなかったため、Inboxで残りの候補を確認してください。"};
+    }
+  }
   refresh();
   return result;
 }
