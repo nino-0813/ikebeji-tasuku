@@ -98,7 +98,7 @@ export async function getComments(taskId: string): Promise<Comment[]> {
 
 export async function getInboxItems(): Promise<InboxItem[]> {
   const workspaceId = await getActiveWorkspaceId();
-  const { data, error } = await db.from("tm_inbox_items").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false });
+  const { data, error } = await db.from("tm_inbox_items").select("*").eq("workspace_id", workspaceId).or("detail.is.null,detail.not.like.withdock-meeting-v1/closed/*").order("created_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }

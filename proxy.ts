@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_COOKIE, authToken } from "./lib/auth";
 
 export default function proxy(request: NextRequest) {
+  // This exact machine endpoint verifies its own timestamped HMAC.
+  if (request.nextUrl.pathname === "/api/internal/meeting-inbox" && request.method === "POST") return NextResponse.next();
   const expected = process.env.APP_PASSWORD;
   if (!expected) return NextResponse.next();
 

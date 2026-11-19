@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { WITH_DOCK_ID, readSource, encodeSource, sourceNote, type ReviewState } from "./meeting-inbox";
 import { db } from "./supabase";
 import { getActiveWorkspaceId, ME_COOKIE, WORKSPACE_COOKIE } from "./data";
 import { AUTH_COOKIE, authToken } from "./auth";
@@ -124,6 +125,10 @@ function validate(input: TaskInput): string | null {
 }
 
 export async function createTask(input: TaskInput): Promise<{ error?: string; id?: string }> {
+  return insertTask(input);
+}
+
+async function insertTask(input: TaskInput, candidateId?: string): Promise<{ error?: string; id?: string }> {
   const error = validate(input);
   if (error) return { error };
 
@@ -141,6 +146,7 @@ export async function createTask(input: TaskInput): Promise<{ error?: string; id
   const { data, error: dbError } = await db
     .from("tm_tasks")
     .insert({
+      ...(candidateId ? { id: candidateId } : {}),
       title: input.title.trim(),
       workspace_id: workspaceId,
       detail: input.detail?.trim() || null,
@@ -159,6 +165,10 @@ export async function createTask(input: TaskInput): Promise<{ error?: string; id
     .select("id")
     .single();
 
+  if (candidateId && dbError?.code === "23505") {
+    const existing = await db.from("tm_tasks").select("id").eq("id", candidateId).eq("workspace_id", workspaceId).maybeSingle();
+    if (existing.data) return { id: existing.data.id };
+  }
   if (dbError) return { error: dbError.message };
   refresh();
   return { id: data.id };
@@ -304,9 +314,69 @@ export async function createInboxItem(title: string, createdBy?: string | null) 
   return {};
 }
 
+async function meetingItem(id: string) {
+  const store = await cookies();
+  const password = process.env.APP_PASSWORD;
+  if (!password || store.get(AUTH_COOKIE)?.value !== authToken(password) || await getActiveWorkspaceId() !== WITH_DOCK_ID) return null;
+  const { data, error } = await db.from("tm_inbox_items").select("id,detail").eq("id",id).eq("workspace_id",WITH_DOCK_ID).maybeSingle();
+  if (error) throw error;
+  const parsed = readSource(data?.detail);
+  return parsed ? { ...parsed, id } : null;
+}
+type Imported = NonNullable<Awaited<ReturnType<typeof meetingItem>>>;
+async function transition(item: Imported, state: ReviewState, target = "") {
+  const next = encodeSource(item.source, state, target);
+  const before = encodeSource(item.source,item.state,item.target);
+  const { data,error } = await db.from("tm_inbox_items").update({detail:next})
+    .eq("id",item.id).eq("workspace_id",WITH_DOCK_ID)
+    .like("detail", before.slice(0,before.indexOf("\n")) + "\n%").select("id");
+  if (error) throw error;
+  return Boolean(data?.length);
+}
+async function claim(id: string, action: "creating" | "linking", target: string) {
+  const item = await meetingItem(id);
+  if (!item) return null;
+  if (item.target === target && item.state === action) return item;
+  if (item.state !== "pending" || !await transition(item,action,target)) return null;
+  return { ...item, state:action, target };
+}
+const reviewed = "候補の状態が変わりました。Inboxを再読み込みしてください。";
+
+export async function promoteMeetingItem(id: string, input: TaskInput): Promise<{error?:string; id?:string}> {
+  const invalid = validate(input);
+  if (invalid) return {error:invalid};
+  const item = await claim(id,"creating",id);
+  if (!item) return {error:reviewed};
+  const result = await insertTask({...input, detail:[input.detail,sourceNote(item.source)].filter(Boolean).join("\n\n")},id);
+  if (result.error) return result;
+  await transition(item,"closed",id);
+  refresh();
+  return result;
+}
+export async function linkMeetingItem(id: string, taskId: string): Promise<{error?:string}> {
+  if (await getActiveWorkspaceId() !== WITH_DOCK_ID) return {error:reviewed};
+  const {data:task} = await db.from("tm_tasks").select("id").eq("workspace_id",WITH_DOCK_ID).eq("id",taskId).maybeSingle();
+  const me = (await cookies()).get(ME_COOKIE)?.value;
+  if (!task || !me) return {error:"ログイン中の担当者と紐づけ先のタスクを確認してください。"};
+  const item = await claim(id,"linking",taskId);
+  if (!item) return {error:reviewed};
+  const {error} = await db.from("tm_comments").upsert({id,task_id:taskId,author_id:me,body:sourceNote(item.source)},{onConflict:"id",ignoreDuplicates:true});
+  if (error) return {error:"リンクの保存に失敗しました。同じタスクを選んで再試行してください。"};
+  await transition(item,"closed",taskId);
+  refresh();
+  return {};
+}
 export async function deleteInboxItem(id: string) {
-  const { error } = await db.from("tm_inbox_items").delete().eq("id", id);
-  if (error) return { error: error.message };
+  const workspace = await getActiveWorkspaceId();
+  const {data,error:readError} = await db.from("tm_inbox_items").select("detail").eq("id",id).eq("workspace_id",workspace).maybeSingle();
+  if (readError) return {error:readError.message};
+  if (readSource(data?.detail)) {
+    const item = await meetingItem(id);
+    if (!item || item.state !== "pending" || !await transition(item,"closed")) return {error:reviewed};
+  } else {
+    const { error } = await db.from("tm_inbox_items").delete().eq("id",id).eq("workspace_id",workspace);
+    if (error) return { error: error.message };
+  }
   refresh();
   return {};
 }

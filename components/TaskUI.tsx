@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import type { Comment, Goal, Member, Project, Subtask, Task, TaskAttachment, Workspace } from "@/lib/types";
 import { CATEGORIES, PRIORITIES, STATUSES } from "@/lib/types";
 import { addDaysISO, formatDateLong, todayISO } from "@/lib/format";
-import { addComment, addSubtask, createTask, deleteInboxItem, deleteSubtask, deleteTask, moveTaskToWorkspace, toggleSubtask, updateTask } from "@/lib/actions";
+import { addComment, addSubtask, createTask, promoteMeetingItem, deleteInboxItem, deleteSubtask, deleteTask, moveTaskToWorkspace, toggleSubtask, updateTask } from "@/lib/actions";
 import { Avatar } from "./ui";
+
+function MeetingReference({text}:{text:string}) {
+  const url = text.match(/^https:\/\/withdock-workspace\.vercel\.app\/#meetings\/[\w-]+$/m)?.[0];
+  return url ? <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-brand underline">元の議事録を開く</a> : null;
+}
 
 export type NewTaskDefaults = {
   title?: string;
@@ -19,6 +24,7 @@ export type NewTaskDefaults = {
   meeting_id?: string | null;
   due_date?: string;
   inbox_id?: string;
+  candidate_id?: string;
 };
 
 type Ctx = {
@@ -148,7 +154,7 @@ function TaskDialog({
     task?.category ?? defaults?.category ?? "marketing",
   );
   const [ownerId, setOwnerId] = useState(
-    task?.owner_id ?? defaults?.owner_id ?? members.find((member) => member.id === me?.id)?.id ?? members[0]?.id ?? "",
+    task?.owner_id ?? defaults?.owner_id ?? (defaults?.candidate_id ? "" : undefined) ?? members.find((member) => member.id === me?.id)?.id ?? members[0]?.id ?? "",
   );
   const [startDate, setStartDate] = useState(task?.start_date ?? defaults?.start_date ?? todayISO());
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaults?.due_date ?? "");
@@ -204,7 +210,7 @@ function TaskDialog({
     let createdId: string | undefined;
     const res = activeTaskId
       ? await updateTask(activeTaskId, payload)
-      : await createTask(payload).then((result) => {
+      : await (defaults?.candidate_id ? promoteMeetingItem(defaults.candidate_id, payload) : createTask(payload)).then((result) => {
           createdId = result.id;
           return result;
         });
@@ -486,6 +492,7 @@ function TaskDialog({
               placeholder="打ち合わせで決まった前提、参考リンク、判断の理由など"
               onChange={(e) => setDetail(e.target.value)}
             />
+            <MeetingReference text={detail}/>
           </div>
 
           <AttachmentList
@@ -850,7 +857,7 @@ function CommentThread({
                     minute: "2-digit",
                   })}
                 </p>
-                <p className="whitespace-pre-wrap text-sm text-ink">{c.body}</p>
+                <p className="whitespace-pre-wrap text-sm text-ink">{c.body}</p><MeetingReference text={c.body}/>
               </div>
             </div>
           );
