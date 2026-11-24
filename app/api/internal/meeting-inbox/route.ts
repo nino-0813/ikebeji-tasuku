@@ -26,7 +26,27 @@ export async function POST(req: Request) {
   if (!d || typeof d.key !== "string" || !/^[\w-]{1,160}$/.test(d.key) || typeof d.meeting !== "string" || !d.meeting.trim() || d.meeting.length > 1500 ||
     !(d.date === null || (typeof d.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.date))) ||
     !Array.isArray(d.candidates) || d.candidates.length > 40 || !d.candidates.every(candidate)) return new Response(null,{status:400});
-  const rows = (d.candidates as Candidate[]).map(c => ({ id: candidateId(d.key,c), workspace_id: WITH_DOCK_ID, title: c.title,
+  type Proposal = Candidate & {kind: string; confidence: string; subject: string};
+  const incoming = d.candidates as (Candidate & Partial<Proposal>)[];
+  const proposals: Proposal[] = [];
+  for (const c of incoming) {
+    if (c.kind === undefined) continue;
+    if (!["customer","project","task","improvement"].includes(c.kind) ||
+        !["high","medium","low"].includes(c.confidence || "") || typeof c.subject !== "string" || c.subject.length > 150) {
+      return new Response(null,{status:400});
+    }
+    proposals.push(c as Proposal);
+  }
+  if (proposals.length) {
+    const records = proposals.map(c=>({
+      id:candidateId(d.key,{...c,title:c.kind+"\n"+c.subject+"\n"+c.title}), kind:c.kind, title:c.title,
+      quote:c.quote, confidence:c.confidence, meeting_key:d.key, meeting_title:d.meeting, meeting_date:d.date,
+      proposed:{subject:c.subject,owner:c.owner,timing:c.timing}
+    }));
+    const {error} = await db.from("dock_proposals").upsert(records,{onConflict:"id",ignoreDuplicates:true});
+    if (error) return new Response(null,{status:503});
+  }
+  const rows = incoming.filter(c=>c.kind === undefined).map(c => ({ id: candidateId(d.key,c), workspace_id: WITH_DOCK_ID, title: c.title,
     detail: encodeSource({...c, key:d.key, meeting:d.meeting, date:d.date},"pending") }));
   if (rows.length) {
     const {error} = await db.from("tm_inbox_items").upsert(rows, { onConflict:"id", ignoreDuplicates:true });

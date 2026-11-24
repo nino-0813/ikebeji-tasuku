@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { WITH_DOCK_ID, readSource, encodeSource, sourceNote, type ReviewState } from "./meeting-inbox";
 import { db } from "./supabase";
 import { getActiveWorkspaceId, ME_COOKIE, WORKSPACE_COOKIE } from "./data";
+import { signTeamMember, TEAM_COOKIE } from "./dock-team";
 import { AUTH_COOKIE, authToken } from "./auth";
 import type { Category, Horizon, Priority, ProjectPhase, Status } from "./types";
 
@@ -19,16 +20,28 @@ export async function signIn(_prev: string | null, form: FormData): Promise<stri
   const password = String(form.get("password") ?? "");
   const expected = process.env.APP_PASSWORD;
   if (!expected) return "APP_PASSWORD が .env.local に設定されていません。";
-  if (password !== expected) return "合言葉が違います。";
+  const teamKey = process.env.WITHDOCK_TEAM_PASSWORD;
+  const teamLogin = Boolean(teamKey && password === teamKey);
+  if (!teamLogin && password !== expected) return "合言葉が違います。";
 
   const store = await cookies();
+  const member = String(form.get("member") ?? "");
+  if (teamLogin && teamKey) {
+    const {data,error} = await db.from("tm_workspace_members").select("member_id")
+      .eq("workspace_id",WITH_DOCK_ID).eq("member_id",member).maybeSingle();
+    if (error || !data) return "with dockのメンバーを選んでください。";
+    const maxAge = 3600 * 24 * 7;
+    store.set(TEAM_COOKIE,signTeamMember(member,Date.now()+maxAge*1000,teamKey),{
+      httpOnly:true, sameSite:"lax", secure:process.env.NODE_ENV==="production", path:"/",maxAge
+    });
+    store.set(WORKSPACE_COOKIE,WITH_DOCK_ID,{httpOnly:true,sameSite:"lax",path:"/"});
+  } else store.delete(TEAM_COOKIE);
   store.set(AUTH_COOKIE, authToken(expected), {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 180,
   });
-  const member = String(form.get("member") ?? "");
   if (member) store.set(ME_COOKIE, member, { sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 180 });
   redirect("/");
 }
@@ -36,6 +49,7 @@ export async function signIn(_prev: string | null, form: FormData): Promise<stri
 export async function signOut() {
   const store = await cookies();
   store.delete(AUTH_COOKIE);
+  store.delete(TEAM_COOKIE);
   redirect("/login");
 }
 

@@ -8,6 +8,13 @@ import { createWorkspace, setMe, setWorkspace, signOut } from "@/lib/actions";
 import { useTaskUI } from "./TaskUI";
 import { Avatar } from "./ui";
 
+import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
+const DOCK_LINKS = [
+  {href:"/",label:"ホーム",icon:"home"}, {href:"/customers",label:"顧客理解",icon:"meeting"},
+  {href:"/cash",label:"目標・入金",icon:"goal"}, {href:"/projects",label:"プロジェクト",icon:"project"},
+  {href:"/inbox",label:"インボックス",icon:"inbox"}, {href:"/improvements",label:"改善提案",icon:"check"},
+  {href:"/settings",label:"設定・連携",icon:"board"},
+];
 const LINKS = [
   { href: "/", label: "ホーム", icon: "home" },
   { href: "/today", label: "今日", icon: "today" },
@@ -49,7 +56,7 @@ export function Nav({
         </button>
 
         <nav className="sidebar-nav" aria-label="メインナビゲーション">
-          {LINKS.map((l) => {
+          {(currentWorkspace?.id===WITH_DOCK_ID?DOCK_LINKS:LINKS).map((l) => {
             const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
             return (
               <Link

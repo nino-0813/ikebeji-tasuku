@@ -22,6 +22,7 @@ import type { Goal, Member, Project, Task } from "@/lib/types";
 import { CATEGORIES, PROJECT_COLORS, PROJECT_PHASES, type ProjectPhase } from "@/lib/types";
 import { daysUntil, isStalled } from "@/lib/format";
 import { createProject, deleteProject, updateProject } from "@/lib/actions";
+import { dockDeadline } from "@/lib/dock-deadline";
 import { TaskRow } from "./TaskCard";
 import { Avatar, CategoryBadge, EmptyState } from "./ui";
 
@@ -227,6 +228,20 @@ function ProjectCard({
   const { project, open, done, owners, overdue, stalled } = summary;
   const goal = goals.find((g) => g.id === project.goal_id);
 
+  if (dragHandle) {
+    const next = open[0];
+    const due = next?.due_date ? dockDeadline(next.due_date) : null;
+    return <div className={`flex items-start gap-1 rounded-xl border p-3 ${due?.surface ?? "border-line bg-white"}`}>
+      {dragHandle}
+      <Link href={`/projects/${project.id}`} className="min-w-0 flex-1 space-y-2 rounded p-1 focus-visible:outline-brand">
+        <h3 className="font-bold text-ink">{project.title}</h3>
+        {project.client_name && <p className="text-xs text-ink-soft">顧客　{project.client_name}</p>}
+        {next && <p className="text-sm text-ink">{next.title}</p>}
+        <p className="text-xs text-ink-soft">{due?.label} {next && " · "}完了 {done.length} / {done.length + open.length} タスク</p>
+        {owners.length > 0 && <p className="text-xs text-ink-soft">担当　{owners.map(m=>m.name).join("・")}</p>}
+      </Link>
+    </div>;
+  }
   return (
     <div className="card flex min-h-24 w-full items-center gap-2 px-2 py-3 text-left transition hover:border-line-strong hover:bg-stone-50 hover:shadow-sm">
         {dragHandle}
