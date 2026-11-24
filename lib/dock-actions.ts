@@ -94,3 +94,23 @@ export async function adoptImprovement(f:FormData) {
   }
   revalidatePath("/","layout");
 }
+
+export async function addStep(f:FormData){
+  const p=await selectedProject(f);
+  const {error}=await db.from("dock_steps").upsert({id:field(f,"request"),project_id:p.id,title:field(f,"title"),position:Number(field(f,"position")),starts_on:field(f,"starts_on")||null,due_on:field(f,"due_on")||null},{onConflict:"id",ignoreDuplicates:true});
+  if(error) throw new Error("工程名と日付を確認してください。");
+  revalidatePath("/","layout");
+}
+export async function finishStep(f:FormData){
+  const p=await selectedProject(f);
+  const completed_on=field(f,"completed_on")||null;
+  const {error}=await db.from("dock_steps").update({completed_on}).eq("project_id",p.id).eq("id",field(f,"step"));
+  if(error)throw new Error("完成日を更新できませんでした。");
+  revalidatePath("/","layout");
+}
+export async function archiveProject(f:FormData){
+  const p=await selectedProject(f);
+  const {error}=await db.from("tm_projects").update({archived:field(f,"archive")==="yes"}).eq("id",p.id).eq("workspace_id",WITH_DOCK_ID);
+  if(error) throw new Error("案件の状態を変更できませんでした。");
+  revalidatePath("/","layout");
+}

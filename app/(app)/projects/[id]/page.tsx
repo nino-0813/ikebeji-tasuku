@@ -1,3 +1,4 @@
+import { DockSteps } from "@/components/DockSteps";
 import { DockContract } from "@/components/DockContract";
 import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
 import Link from "next/link";
@@ -85,7 +86,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </div>
       </div>
 
-      {project.workspace_id===WITH_DOCK_ID ? <DockContract id={project.id} customer={project.dock_customer_id}/> : <ProjectDashboard project={project} tasks={mine} />}
+      {project.workspace_id===WITH_DOCK_ID ? <><DockContract id={project.id} customer={project.dock_customer_id}/><DockSteps id={project.id} archived={project.archived}/></> : <ProjectDashboard project={project} tasks={mine} />}
 
       {goal && (
         <Link
