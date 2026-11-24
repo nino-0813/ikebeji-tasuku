@@ -5,12 +5,13 @@ import type { Member } from "@/lib/types";
 import { signIn } from "@/lib/actions";
 import { Avatar } from "@/components/ui";
 
-export function LoginForm({ members }: { members: Member[] }) {
+export function LoginForm({ members, workspace }: { members: Member[]; workspace?: string }) {
   const [error, action, pending] = useActionState(signIn, null);
   const [member, setMember] = useState(members[0]?.id ?? "");
 
   return (
     <form action={action} className="card space-y-4 p-5 shadow-sm">
+      <input type="hidden" name="workspace" value={workspace ?? ""} />
       <div>
         <label className="label">自分は誰？</label>
         <div className="flex flex-wrap gap-1.5">

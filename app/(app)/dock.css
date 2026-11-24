@@ -516,3 +516,10 @@
   font-size: 11px;
   padding-inline: 1px;
 }
+
+.wd-switch { position: relative; }
+.wd-switch summary { cursor: pointer; list-style: none; }
+.wd-switch summary::-webkit-details-marker { display: none; }
+.wd-switch > div { position: absolute; z-index: 5; width: 100%; padding: 4px; background: white; color: #203839; border: 1px solid #c3d5cf; border-radius: 8px; box-shadow: 0 4px 12px #20383924; }
+.wd-switch a, .wd-switch span { display: block; padding: 8px; border-radius: 4px; }
+.wd-switch a:hover, .wd-switch span { background: #edf5f1; }

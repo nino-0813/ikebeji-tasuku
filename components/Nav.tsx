@@ -9,12 +9,7 @@ import { useTaskUI } from "./TaskUI";
 import { Avatar } from "./ui";
 
 import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
-const DOCK_LINKS = [
-  {href:"/",label:"ホーム",icon:"home"}, {href:"/customers",label:"顧客理解",icon:"meeting"},
-  {href:"/cash",label:"目標・入金",icon:"goal"}, {href:"/projects",label:"プロジェクト",icon:"project"},
-  {href:"/inbox",label:"インボックス",icon:"inbox"}, {href:"/improvements",label:"改善提案",icon:"check"},
-  {href:"/settings",label:"設定・連携",icon:"board"},
-];
+
 const LINKS = [
   { href: "/", label: "ホーム", icon: "home" },
   { href: "/today", label: "今日", icon: "today" },
@@ -43,7 +38,7 @@ export function Nav({
     <aside className="app-sidebar">
       <a className="skip-link" href="#main-content">本文へ移動</a>
       <div className="sidebar-inner">
-        {currentWorkspace?.id === WITH_DOCK_ID ? <strong>with dock</strong> : <WorkspaceSwitcher workspaces={workspaces} currentWorkspace={currentWorkspace} members={members} />}
+        <WorkspaceSwitcher workspaces={workspaces} currentWorkspace={currentWorkspace} members={members} />
 
         <button
           onClick={() => openNew()}
@@ -56,7 +51,7 @@ export function Nav({
         </button>
 
         <nav className="sidebar-nav" aria-label="メインナビゲーション">
-          {(currentWorkspace?.id===WITH_DOCK_ID?DOCK_LINKS:LINKS).map((l) => {
+          {LINKS.map((l) => {
             const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
             return (
               <Link
@@ -77,7 +72,7 @@ export function Nav({
           <Icon name="plus" />
         </button>
         <div className="sidebar-spacer" />
-        <div className="sidebar-footer">{currentWorkspace?.id === WITH_DOCK_ID ? <form action={signOut}><span>{me?.name}　</span><button className="underline">ログアウト</button></form> : <MeSwitcher members={members} me={me} />}</div>
+        <div className="sidebar-footer"><MeSwitcher members={members} me={me} /></div>
       </div>
     </aside>
   );
@@ -117,6 +112,10 @@ function WorkspaceSwitcher({
   const [pending, start] = useTransition();
 
   const selectWorkspace = (id: string) => {
+    if (id === WITH_DOCK_ID) {
+      router.push("/login?team=withdock");
+      return;
+    }
     setError("");
     start(async () => {
       const result = await setWorkspace(id);

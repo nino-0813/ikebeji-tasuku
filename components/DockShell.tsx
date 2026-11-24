@@ -1,4 +1,5 @@
 "use client";
+import { boardPages } from "@/lib/board-pages";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -41,9 +42,15 @@ export function DockShell({
           with<span>dock</span>
           <small>OPERATIONS</small>
         </Link>
-        <Link href="/" className="wd-workspace">
-          ◆　with dock
-        </Link>
+        <details className="wd-switch">
+          <summary className="wd-workspace" aria-label="ページを切り替える。現在はwith dock">◆　with dock　⌄</summary>
+          <div>
+            {boardPages.map(({ id, name }) => (
+              <Link key={id} href={"/login?workspace=" + id}>{name}</Link>
+            ))}
+            <span aria-current="true">✓　with dock</span>
+          </div>
+        </details>
         <nav aria-label="ワークスペース">
           {pages.map(([url, label]) => (
             <Link

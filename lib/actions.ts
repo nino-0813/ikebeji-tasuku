@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { WITH_DOCK_ID, readSource, encodeSource, sourceNote, type ReviewState } from "./meeting-inbox";
 import { db } from "./supabase";
 import { getActiveWorkspaceId, ME_COOKIE, WORKSPACE_COOKIE } from "./data";
+import { boardPages } from "./board-pages";
 import { TEAM_COOKIE } from "./dock-identity";
 import { dockTeamMember } from "./dock-team";
 import { AUTH_COOKIE, authToken } from "./auth";
@@ -45,7 +46,12 @@ export async function signIn(_prev: string | null, form: FormData): Promise<stri
   const store = await cookies();
   const member = String(form.get("member") || "");
   store.delete(TEAM_COOKIE);
-  if (store.get(WORKSPACE_COOKIE)?.value === WITH_DOCK_ID) store.delete(WORKSPACE_COOKIE);
+  const destination = boardPages.find(page => page.id === form.get("workspace"));
+  if (destination) {
+    store.set(WORKSPACE_COOKIE, destination.id, { sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 180 });
+  } else if (store.get(WORKSPACE_COOKIE)?.value === WITH_DOCK_ID) {
+    store.delete(WORKSPACE_COOKIE);
+  }
   store.set(AUTH_COOKIE, authToken(expected), {
     httpOnly: true,
     sameSite: "lax",
