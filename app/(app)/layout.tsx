@@ -22,17 +22,19 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     getCurrentWorkspace(),
   ]);
 
+  const personal = currentWorkspace?.id === WITH_DOCK_ID;
+  const visibleWorkspaces = personal ? [currentWorkspace] : workspaces;
   return (
     <TaskUIProvider
       members={members}
       goals={goals}
       projects={projects}
       me={me}
-      workspaces={workspaces}
+      workspaces={visibleWorkspaces}
       currentWorkspace={currentWorkspace}
     >
       <div className="app-shell">
-        <Nav members={allMembers} me={me} workspaces={workspaces} currentWorkspace={currentWorkspace} />
+        <Nav members={personal ? members : allMembers} me={me} workspaces={visibleWorkspaces} currentWorkspace={currentWorkspace} />
         <main id="main-content" className="app-main">
           <div className="page-content">{children}</div>
         </main>

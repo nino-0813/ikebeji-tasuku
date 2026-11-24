@@ -6,12 +6,33 @@ import { redirect } from "next/navigation";
 import { WITH_DOCK_ID, readSource, encodeSource, sourceNote, type ReviewState } from "./meeting-inbox";
 import { db } from "./supabase";
 import { getActiveWorkspaceId, ME_COOKIE, WORKSPACE_COOKIE } from "./data";
-import { signTeamMember, TEAM_COOKIE } from "./dock-team";
+import { TEAM_COOKIE } from "./dock-identity";
+import { dockTeamMember } from "./dock-team";
 import { AUTH_COOKIE, authToken } from "./auth";
 import type { Category, Horizon, Priority, ProjectPhase, Status } from "./types";
 
 function refresh() {
   revalidatePath("/", "layout");
+}
+
+async function requireRecord(table: string, id: string) {
+  const workspace = await getActiveWorkspaceId();
+  const { data } = await db.from(table).select("id").eq("id", id).eq("workspace_id", workspace).maybeSingle();
+  if (!data) throw new Error("このページの対象を選択してください。");
+}
+
+async function requireSubtask(id: string) {
+  const { data } = await db.from("tm_subtasks").select("task_id").eq("id", id).maybeSingle();
+  if (!data) throw new Error("サブタスクが見つかりません。");
+  await requireRecord("tm_tasks", data.task_id);
+}
+
+async function checkTaskLinks(input: Partial<TaskInput>) {
+  await Promise.all([
+    input.goal_id && requireRecord("tm_goals", input.goal_id),
+    input.meeting_id && requireRecord("tm_meetings", input.meeting_id),
+    input.project_id && requireRecord("tm_projects", input.project_id),
+  ]);
 }
 
 // ---------------------------------------------------------------- ログイン
@@ -20,28 +41,11 @@ export async function signIn(_prev: string | null, form: FormData): Promise<stri
   const password = String(form.get("password") ?? "");
   const expected = process.env.APP_PASSWORD;
   if (!expected) return "APP_PASSWORD が .env.local に設定されていません。";
-  const teamKey = process.env.WITHDOCK_TEAM_PASSWORD;
-  const teamInput = String(form.get("teamPassword") || "");
-  const teamLogin = Boolean(teamKey && teamInput === teamKey);
+  if (password !== expected) return "合言葉が違います。";
   const store = await cookies();
-  const alreadySignedIn = store.get(AUTH_COOKIE)?.value === authToken(expected);
-  if (teamInput && !teamLogin) return "チーム用の合言葉を確認してください。";
-  if (!(teamLogin && alreadySignedIn) && password !== expected) return "合言葉が違います。";
-
-  const member = String(form.get("member") ?? "");
-  if (teamLogin && teamKey) {
-    const {data,error} = await db.from("tm_workspace_members").select("member_id")
-      .eq("workspace_id",WITH_DOCK_ID).eq("member_id",member).maybeSingle();
-    if (error || !data) return "with dockのメンバーを選んでください。";
-    const maxAge = 3600 * 24 * 7;
-    store.set(TEAM_COOKIE,signTeamMember(member,Date.now()+maxAge*1000,teamKey),{
-      httpOnly:true, sameSite:"lax", secure:process.env.NODE_ENV==="production", path:"/",maxAge
-    });
-    store.set(WORKSPACE_COOKIE,WITH_DOCK_ID,{httpOnly:true,sameSite:"lax",path:"/"});
-  } else {
-    store.delete(TEAM_COOKIE);
-    if(store.get(WORKSPACE_COOKIE)?.value===WITH_DOCK_ID) store.delete(WORKSPACE_COOKIE);
-  }
+  const member = String(form.get("member") || "");
+  store.delete(TEAM_COOKIE);
+  if (store.get(WORKSPACE_COOKIE)?.value === WITH_DOCK_ID) store.delete(WORKSPACE_COOKIE);
   store.set(AUTH_COOKIE, authToken(expected), {
     httpOnly: true,
     sameSite: "lax",
@@ -54,12 +58,17 @@ export async function signIn(_prev: string | null, form: FormData): Promise<stri
 
 export async function signOut() {
   const store = await cookies();
+  const personal = store.has(TEAM_COOKIE);
   store.delete(AUTH_COOKIE);
   store.delete(TEAM_COOKIE);
-  redirect("/login");
+  store.delete(WORKSPACE_COOKIE);
+  store.delete(ME_COOKIE);
+  redirect(personal ? "/login?team=withdock" : "/login");
 }
 
 export async function setMe(memberId: string) {
+  await getActiveWorkspaceId();
+  if ((await cookies()).has(TEAM_COOKIE)) return;
   const store = await cookies();
   store.set(ME_COOKIE, memberId, { sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 180 });
   refresh();
@@ -68,6 +77,8 @@ export async function setMe(memberId: string) {
 // ---------------------------------------------------------------- ページ
 
 export async function setWorkspace(workspaceId: string): Promise<{ error?: string }> {
+  await getActiveWorkspaceId();
+  if ((await cookies()).has(TEAM_COOKIE)) return { error: "個人ログインではウィズドックを利用できます。" };
   const { data, error } = await db.from("tm_workspaces").select("id").eq("id", workspaceId).maybeSingle();
   if (error || !data) return { error: error?.message ?? "ページが見つかりません。" };
 
@@ -83,6 +94,8 @@ export async function setWorkspace(workspaceId: string): Promise<{ error?: strin
 }
 
 export async function createWorkspace(name: string, memberIds: string[]): Promise<{ error?: string; id?: string }> {
+  await getActiveWorkspaceId();
+  if ((await cookies()).has(TEAM_COOKIE)) return { error: "個人ログインではページを追加できません。" };
   const cleanName = name.trim();
   if (!cleanName) return { error: "ページ名を入力してください。" };
   if (cleanName.length > 40) return { error: "ページ名は40文字以内で入力してください。" };
@@ -149,6 +162,7 @@ export async function createTask(input: TaskInput): Promise<{ error?: string; id
 }
 
 async function insertTask(input: TaskInput, candidateId?: string): Promise<{ error?: string; id?: string }> {
+  await checkTaskLinks(input);
   const error = validate(input);
   if (error) return { error };
 
@@ -198,6 +212,8 @@ export async function updateTask(
   id: string,
   patch: Partial<TaskInput>,
 ): Promise<{ error?: string }> {
+  await checkTaskLinks(patch);
+  await requireRecord("tm_tasks", id);
   if (patch.title !== undefined && !patch.title.trim()) return { error: "タスク名は空にできません。" };
   if (patch.owner_id !== undefined && !patch.owner_id) return { error: "担当者は空にできません。" };
   if (patch.due_date !== undefined && !patch.due_date) return { error: "期限は空にできません。" };
@@ -205,6 +221,8 @@ export async function updateTask(
     return { error: "開始日は期限以前にしてください。" };
 
   const clean: Record<string, unknown> = { ...patch };
+  delete clean.workspace_id;
+  delete clean.id;
   if (typeof clean.title === "string") clean.title = clean.title.trim();
   if (typeof clean.detail === "string") clean.detail = clean.detail.trim() || null;
   if (typeof clean.waiting_on === "string") clean.waiting_on = clean.waiting_on.trim() || null;
@@ -226,6 +244,8 @@ export async function moveTaskToWorkspace(
   workspaceId: string,
   ownerId: string,
 ): Promise<{ error?: string }> {
+  await requireRecord("tm_tasks", id);
+  if ((await cookies()).has(TEAM_COOKIE)) return { error: "このページから移動できません。" };
   const [{ data: workspace, error: workspaceError }, { data: membership, error: memberError }] =
     await Promise.all([
       db.from("tm_workspaces").select("id").eq("id", workspaceId).maybeSingle(),
@@ -260,6 +280,8 @@ export async function moveTask(
   status: Status,
   orderedIdsInColumn: string[],
 ): Promise<{ error?: string }> {
+  await Promise.all(orderedIdsInColumn.map(taskId => requireRecord("tm_tasks", taskId)));
+  await requireRecord("tm_tasks", id);
   const { error } = await db.from("tm_tasks").update({ status }).eq("id", id);
   if (error) return { error: error.message };
 
@@ -274,6 +296,7 @@ export async function moveTask(
 
 /** カードの「完了」ボタンなど、1クリックのステータス変更 */
 export async function setTaskStatus(id: string, status: Status): Promise<{ error?: string }> {
+  await requireRecord("tm_tasks", id);
   const { error } = await db.from("tm_tasks").update({ status }).eq("id", id);
   if (error) return { error: error.message };
   refresh();
@@ -282,6 +305,7 @@ export async function setTaskStatus(id: string, status: Status): Promise<{ error
 
 /** 止まっているタスクを「今日から仕切り直す」。status_changed_at を今にリセットする */
 export async function nudgeTask(id: string): Promise<{ error?: string }> {
+  await requireRecord("tm_tasks", id);
   const { error } = await db
     .from("tm_tasks")
     .update({ status_changed_at: new Date().toISOString() })
@@ -292,6 +316,7 @@ export async function nudgeTask(id: string): Promise<{ error?: string }> {
 }
 
 export async function deleteTask(id: string): Promise<{ error?: string }> {
+  await requireRecord("tm_tasks", id);
   const { data: attachments, error: attachmentError } = await db
     .from("tm_task_attachments")
     .select("storage_path")
@@ -310,10 +335,11 @@ export async function deleteTask(id: string): Promise<{ error?: string }> {
 }
 
 export async function addComment(taskId: string, authorId: string, body: string) {
+  await requireRecord("tm_tasks", taskId);
   if (!body.trim()) return { error: "コメントが空です。" };
   const { error } = await db
     .from("tm_comments")
-    .insert({ task_id: taskId, author_id: authorId, body: body.trim() });
+    .insert({ task_id: taskId, author_id: (await dockTeamMember()) || authorId, body: body.trim() });
   if (error) return { error: error.message };
   refresh();
   return {};
@@ -327,7 +353,7 @@ export async function createInboxItem(title: string, createdBy?: string | null) 
   const { error } = await db.from("tm_inbox_items").insert({
     title: title.trim(),
     workspace_id: workspaceId,
-    created_by: createdBy || null,
+    created_by: (await dockTeamMember()) || createdBy || null,
   });
   if (error) return { error: error.message };
   refresh();
@@ -335,9 +361,7 @@ export async function createInboxItem(title: string, createdBy?: string | null) 
 }
 
 async function meetingItem(id: string) {
-  const store = await cookies();
-  const password = process.env.APP_PASSWORD;
-  if (!password || store.get(AUTH_COOKIE)?.value !== authToken(password) || await getActiveWorkspaceId() !== WITH_DOCK_ID) return null;
+  if (!await dockTeamMember()) return null;
   const { data, error } = await db.from("tm_inbox_items").select("id,detail").eq("id",id).eq("workspace_id",WITH_DOCK_ID).maybeSingle();
   if (error) throw error;
   const parsed = readSource(data?.detail);
@@ -388,7 +412,7 @@ export async function promoteMeetingItem(id: string, input: TaskInput, related: 
 export async function linkMeetingItem(id: string, taskId: string): Promise<{error?:string}> {
   if (await getActiveWorkspaceId() !== WITH_DOCK_ID) return {error:reviewed};
   const {data:task} = await db.from("tm_tasks").select("id").eq("workspace_id",WITH_DOCK_ID).eq("id",taskId).maybeSingle();
-  const me = (await cookies()).get(ME_COOKIE)?.value;
+  const me = await dockTeamMember();
   if (!task || !me) return {error:"ログイン中の担当者と紐づけ先のタスクを確認してください。"};
   const item = await claim(id,"linking",taskId);
   if (!item) return {error:reviewed};
@@ -416,6 +440,7 @@ export async function deleteInboxItem(id: string) {
 // ---------------------------------------------------------------- サブタスク
 
 export async function addSubtask(taskId: string, title: string) {
+  await requireRecord("tm_tasks", taskId);
   if (!title.trim()) return { error: "サブタスクを入力してください。" };
   const { data: last } = await db
     .from("tm_subtasks")
@@ -434,6 +459,7 @@ export async function addSubtask(taskId: string, title: string) {
 }
 
 export async function toggleSubtask(id: string, done: boolean) {
+  await requireSubtask(id);
   const { error } = await db.from("tm_subtasks").update({ done }).eq("id", id);
   if (error) return { error: error.message };
   refresh();
@@ -441,6 +467,7 @@ export async function toggleSubtask(id: string, done: boolean) {
 }
 
 export async function deleteSubtask(id: string) {
+  await requireSubtask(id);
   const { error } = await db.from("tm_subtasks").delete().eq("id", id);
   if (error) return { error: error.message };
   refresh();
@@ -462,13 +489,15 @@ export async function createMeeting(title: string, heldOn: string) {
 }
 
 export async function updateMeeting(id: string, patch: { title?: string; notes?: string; held_on?: string }) {
-  const { error } = await db.from("tm_meetings").update(patch).eq("id", id);
+  await requireRecord("tm_meetings", id);
+  const { error } = await db.from("tm_meetings").update({ ...patch, id, workspace_id: await getActiveWorkspaceId() }).eq("id", id);
   if (error) return { error: error.message };
   refresh();
   return {};
 }
 
 export async function deleteMeeting(id: string) {
+  await requireRecord("tm_meetings", id);
   const { error } = await db.from("tm_meetings").delete().eq("id", id);
   if (error) return { error: error.message };
   refresh();
@@ -497,6 +526,7 @@ export type ProjectInput = {
 };
 
 export async function createProject(input: ProjectInput): Promise<{ error?: string; id?: string }> {
+  if (input.goal_id) await requireRecord("tm_goals", input.goal_id);
   if (!input.title.trim()) return { error: "プロジェクト名を入れてください。" };
 
   const workspaceId = await getActiveWorkspaceId();
@@ -533,10 +563,14 @@ export async function updateProject(
   id: string,
   patch: Partial<ProjectInput> & { archived?: boolean },
 ): Promise<{ error?: string }> {
+  if (patch.goal_id) await requireRecord("tm_goals", patch.goal_id);
+  await requireRecord("tm_projects", id);
   if (patch.title !== undefined && !patch.title.trim())
     return { error: "プロジェクト名は空にできません。" };
 
   const clean: Record<string, unknown> = { ...patch };
+  delete clean.workspace_id;
+  delete clean.id;
   if (typeof clean.title === "string") clean.title = clean.title.trim();
   if (typeof clean.detail === "string") clean.detail = clean.detail.trim() || null;
   for (const key of ["client_name", "client_contact_name", "client_email", "client_phone", "client_website", "payment_due_date"]) {
@@ -558,6 +592,7 @@ export async function updateProject(
  * 中身が全部終わっただけなら削除ではなく updateProject({ archived: true }) を使うこと。
  */
 export async function deleteProject(id: string): Promise<{ error?: string }> {
+  await requireRecord("tm_projects", id);
   const { error } = await db.from("tm_projects").delete().eq("id", id);
   if (error) return { error: error.message };
   refresh();
@@ -566,6 +601,7 @@ export async function deleteProject(id: string): Promise<{ error?: string }> {
 
 /** 一覧の並べ替え */
 export async function reorderProjects(orderedIds: string[]): Promise<{ error?: string }> {
+  await Promise.all(orderedIds.map(id => requireRecord("tm_projects", id)));
   await Promise.all(
     orderedIds.map((id, index) => db.from("tm_projects").update({ sort_order: index }).eq("id", id)),
   );
@@ -589,6 +625,7 @@ export type GoalInput = {
 };
 
 export async function createGoal(input: GoalInput) {
+  if (input.parent_goal_id) await requireRecord("tm_goals", input.parent_goal_id);
   if (!input.title.trim()) return { error: "目標名を入れてください。" };
   if (!input.deadline) return { error: "期限を入れてください。" };
   const workspaceId = await getActiveWorkspaceId();
@@ -606,7 +643,9 @@ export async function createGoal(input: GoalInput) {
 }
 
 export async function updateGoal(id: string, patch: Partial<GoalInput> & { archived?: boolean }) {
-  const { error } = await db.from("tm_goals").update(patch).eq("id", id);
+  if (patch.parent_goal_id) await requireRecord("tm_goals", patch.parent_goal_id);
+  await requireRecord("tm_goals", id);
+  const { error } = await db.from("tm_goals").update({ ...patch, id, workspace_id: await getActiveWorkspaceId() }).eq("id", id);
   if (error) return { error: error.message };
   refresh();
   return {};
@@ -614,6 +653,7 @@ export async function updateGoal(id: string, patch: Partial<GoalInput> & { archi
 
 /** 実績を記録する。goals.current_value も最新値に合わせて更新する */
 export async function addGoalLog(goalId: string, value: number, recordedOn: string, memo?: string) {
+  await requireRecord("tm_goals", goalId);
   const { error } = await db
     .from("tm_goal_logs")
     .insert({ goal_id: goalId, value, recorded_on: recordedOn, memo: memo?.trim() || null });
@@ -634,6 +674,7 @@ export async function addGoalLog(goalId: string, value: number, recordedOn: stri
 }
 
 export async function deleteGoal(id: string) {
+  await requireRecord("tm_goals", id);
   const { error } = await db.from("tm_goals").delete().eq("id", id);
   if (error) return { error: error.message };
   refresh();

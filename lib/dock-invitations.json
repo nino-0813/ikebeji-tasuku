@@ -1,0 +1,22 @@
+{
+  "ninomiya": {
+    "name": "二宮",
+    "id": "18df5176-32ac-4816-b1b3-48d3c0e7eb32",
+    "digest": "3f859a58833c3bd16896119c3e57423049331fda70f731ef33caa307fe513e19"
+  },
+  "honma": {
+    "name": "本間",
+    "id": "ad34490b-9773-4dd5-aad0-df44e8dae96b",
+    "digest": "9edd944d0a0865d8f58da5cfd4fa7afe9732f8c157e6f6bb06df6cd3f0b3e4eb"
+  },
+  "toru": {
+    "name": "とおるさん",
+    "id": "d9a9a3fa-e005-43ce-a555-35286686c34f",
+    "digest": "25d099a1ed3aa1aaaca7f43a4403e3598e8b4c3cb9f9826bbb1ef58ba65b0eb7"
+  },
+  "goda": {
+    "name": "合田",
+    "id": "941b6bb4-056e-4528-9ce8-27e9491e8697",
+    "digest": "57125fdde8f8b6e493f92add70d357a3f0f2f92d897a2d215a30692a4744eb33"
+  }
+}

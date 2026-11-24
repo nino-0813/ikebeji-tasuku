@@ -43,7 +43,7 @@ export function Nav({
     <aside className="app-sidebar">
       <a className="skip-link" href="#main-content">本文へ移動</a>
       <div className="sidebar-inner">
-        <WorkspaceSwitcher workspaces={workspaces} currentWorkspace={currentWorkspace} members={members} />
+        {currentWorkspace?.id === WITH_DOCK_ID ? <strong>with dock</strong> : <WorkspaceSwitcher workspaces={workspaces} currentWorkspace={currentWorkspace} members={members} />}
 
         <button
           onClick={() => openNew()}
@@ -77,7 +77,7 @@ export function Nav({
           <Icon name="plus" />
         </button>
         <div className="sidebar-spacer" />
-        <div className="sidebar-footer"><MeSwitcher members={members} me={me} /></div>
+        <div className="sidebar-footer">{currentWorkspace?.id === WITH_DOCK_ID ? <form action={signOut}><span>{me?.name}　</span><button className="underline">ログアウト</button></form> : <MeSwitcher members={members} me={me} />}</div>
       </div>
     </aside>
   );

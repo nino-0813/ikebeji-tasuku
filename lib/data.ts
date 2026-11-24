@@ -1,4 +1,8 @@
 import { cookies } from "next/headers";
+import { AUTH_COOKIE, authToken } from "./auth";
+import { dockTeamMember } from "./dock-team";
+import { TEAM_COOKIE } from "./dock-identity";
+import { WITH_DOCK_ID } from "./meeting-inbox";
 import { db } from "./supabase";
 import type { Comment, Goal, GoalLog, InboxItem, Meeting, Member, Project, Subtask, Task, Workspace } from "./types";
 
@@ -44,7 +48,15 @@ export async function getWorkspaceMembers(): Promise<Member[]> {
 
 export async function getActiveWorkspaceId(): Promise<string> {
   const store = await cookies();
-  return store.get(WORKSPACE_COOKIE)?.value || DEFAULT_WORKSPACE_ID;
+  if (store.has(TEAM_COOKIE)) {
+    if (await dockTeamMember()) return WITH_DOCK_ID;
+    throw new Error("ログインしてください。");
+  }
+  const id = store.get(WORKSPACE_COOKIE)?.value || DEFAULT_WORKSPACE_ID;
+  const password = process.env.APP_PASSWORD;
+  if (!password || store.get(AUTH_COOKIE)?.value !== authToken(password) || id === WITH_DOCK_ID)
+    throw new Error("ログインしてください。");
+  return id;
 }
 
 export async function getCurrentWorkspace(): Promise<Workspace | null> {
@@ -61,7 +73,7 @@ export async function getMembers(): Promise<Member[]> {
 /** 「今このブラウザを使っているのは誰か」。未設定なら null */
 export async function getMe(): Promise<Member | null> {
   const store = await cookies();
-  const id = store.get(ME_COOKIE)?.value;
+  const id = store.has(TEAM_COOKIE) ? await dockTeamMember() : store.get(ME_COOKIE)?.value;
   if (!id) return null;
   const members = await getMembers();
   return members.find((m) => m.id === id) ?? null;
