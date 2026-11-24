@@ -13,12 +13,12 @@ export function invitation(code: string) {
 
 export async function teamIdentity(token: string | undefined) {
   if (!token) return null;
-  const { data, error } = await db.auth.getUser(token);
-  if (error || !data.user) return null;
-  const account = entries.find(([, identity]) => identity.id === data.user.id);
-  if (!account) return null;
-  const [member] = account;
-  const membership = await db.from("tm_workspace_members").select("member_id")
-    .eq("workspace_id", WITH_DOCK_ID).eq("member_id", member).maybeSingle();
-  return membership.data && !membership.error ? member : null;
+  const [auth, membership] = await Promise.all([
+    db.auth.getUser(token),
+    db.from("tm_workspace_members").select("member_id").eq("workspace_id", WITH_DOCK_ID),
+  ]);
+  const user = auth.data.user;
+  if (auth.error || !user || membership.error) return null;
+  const member = entries.find(([, identity]) => identity.id === user.id)?.[0];
+  return member && membership.data.some(row => row.member_id === member) ? member : null;
 }

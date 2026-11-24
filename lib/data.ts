@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE, authToken } from "./auth";
 import { dockTeamMember } from "./dock-team";
@@ -16,7 +17,7 @@ function relatedMember(value: unknown): Member | null {
   return candidate as Member;
 }
 
-export async function getWorkspaces(): Promise<Workspace[]> {
+export const getWorkspaces = cache(async function getWorkspaces(): Promise<Workspace[]> {
   const [{ data, error }, { data: memberships, error: membershipError }] = await Promise.all([
     db.from("tm_workspaces").select("*").order("sort_order").order("created_at"),
     db.from("tm_workspace_members").select("workspace_id, tm_members(*)"),
@@ -31,9 +32,9 @@ export async function getWorkspaces(): Promise<Workspace[]> {
       .filter((member): member is Member => Boolean(member))
       .sort((a, b) => a.sort_order - b.sort_order),
   }));
-}
+});
 
-export async function getWorkspaceMembers(): Promise<Member[]> {
+export const getWorkspaceMembers = cache(async function getWorkspaceMembers(): Promise<Member[]> {
   const workspaceId = await getActiveWorkspaceId();
   const { data, error } = await db
     .from("tm_workspace_members")
@@ -44,9 +45,9 @@ export async function getWorkspaceMembers(): Promise<Member[]> {
     .map((membership) => relatedMember(membership.tm_members))
     .filter((member): member is Member => Boolean(member))
     .sort((a, b) => a.sort_order - b.sort_order);
-}
+});
 
-export async function getActiveWorkspaceId(): Promise<string> {
+export const getActiveWorkspaceId = cache(async function getActiveWorkspaceId(): Promise<string> {
   const store = await cookies();
   if (store.has(TEAM_COOKIE)) {
     if (await dockTeamMember()) return WITH_DOCK_ID;
@@ -57,29 +58,38 @@ export async function getActiveWorkspaceId(): Promise<string> {
   if (!password || store.get(AUTH_COOKIE)?.value !== authToken(password) || id === WITH_DOCK_ID)
     throw new Error("ログインしてください。");
   return id;
-}
+});
 
-export async function getCurrentWorkspace(): Promise<Workspace | null> {
+export const getCurrentWorkspace = cache(async function getCurrentWorkspace(): Promise<Workspace | null> {
+  if ((await cookies()).has(TEAM_COOKIE)) {
+    const id = await getActiveWorkspaceId();
+    const [workspace, members] = await Promise.all([
+      db.from("tm_workspaces").select("*").eq("id", id).single(),
+      getWorkspaceMembers(),
+    ]);
+    if (workspace.error) throw workspace.error;
+    return { ...workspace.data, members };
+  }
   const [workspaces, activeId] = await Promise.all([getWorkspaces(), getActiveWorkspaceId()]);
   return workspaces.find((workspace) => workspace.id === activeId) ?? workspaces[0] ?? null;
-}
+});
 
-export async function getMembers(): Promise<Member[]> {
+export const getMembers = cache(async function getMembers(): Promise<Member[]> {
   const { data, error } = await db.from("tm_members").select("*").order("sort_order");
   if (error) throw error;
   return data ?? [];
-}
+});
 
 /** 「今このブラウザを使っているのは誰か」。未設定なら null */
-export async function getMe(): Promise<Member | null> {
+export const getMe = cache(async function getMe(): Promise<Member | null> {
   const store = await cookies();
   const id = store.has(TEAM_COOKIE) ? await dockTeamMember() : store.get(ME_COOKIE)?.value;
   if (!id) return null;
-  const members = await getMembers();
+  const members = store.has(TEAM_COOKIE) ? await getWorkspaceMembers() : await getMembers();
   return members.find((m) => m.id === id) ?? null;
-}
+});
 
-export async function getTasks(): Promise<Task[]> {
+export const getTasks = cache(async function getTasks(): Promise<Task[]> {
   const workspaceId = await getActiveWorkspaceId();
   const { data, error } = await db
     .from("tm_tasks")
@@ -89,7 +99,7 @@ export async function getTasks(): Promise<Task[]> {
     .order("due_date", { ascending: true });
   if (error) throw error;
   return data ?? [];
-}
+});
 
 export async function getTask(id: string): Promise<Task | null> {
   const workspaceId = await getActiveWorkspaceId();
@@ -126,7 +136,7 @@ export async function getSubtasks(taskId: string): Promise<Subtask[]> {
   return data ?? [];
 }
 
-export async function getGoals(): Promise<Goal[]> {
+export const getGoals = cache(async function getGoals(): Promise<Goal[]> {
   const workspaceId = await getActiveWorkspaceId();
   const { data, error } = await db
     .from("tm_goals")
@@ -137,10 +147,10 @@ export async function getGoals(): Promise<Goal[]> {
     .order("deadline");
   if (error) throw error;
   return data ?? [];
-}
+});
 
 /** 畳んでいないプロジェクト。並び順 → 作成順 */
-export async function getProjects(): Promise<Project[]> {
+export const getProjects = cache(async function getProjects(): Promise<Project[]> {
   const workspaceId = await getActiveWorkspaceId();
   const { data, error } = await db
     .from("tm_projects")
@@ -151,7 +161,7 @@ export async function getProjects(): Promise<Project[]> {
     .order("created_at", { ascending: true });
   if (error) throw error;
   return data ?? [];
-}
+});
 
 /** 畳んだものも含めた全プロジェクト */
 export async function getAllProjects(): Promise<Project[]> {

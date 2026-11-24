@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { adoptImprovement } from "@/lib/dock-actions";
 import { getProjects, getWorkspaceMembers } from "@/lib/data";
 import { notFound } from "next/navigation";
@@ -48,18 +49,18 @@ export default async function Improvements({
           meeting: "会話から",
           adopted: "採用済み",
         }).map(([key, label]) => (
-          <a
+          <Link
             key={key}
             aria-current={key === tab ? "page" : undefined}
             href={"/improvements?tab=" + key}
           >
             {label}
-          </a>
+          </Link>
         ))}
         <span className="grow" />
-        <a className="wd-accent" href="/improvements?tab=adopted">
+        <Link className="wd-accent" href="/improvements?tab=adopted">
           採用履歴を見る ↗
-        </a>
+        </Link>
       </nav>
       <div className="wd-three">
         {!visible.length && <p>この条件の改善提案はありません。</p>}

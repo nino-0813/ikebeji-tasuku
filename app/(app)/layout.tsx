@@ -21,10 +21,8 @@ import { SetupNotice } from "@/components/SetupNotice";
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   if (!isConfigured()) return <SetupNotice />;
 
-  if (
-    (await getActiveWorkspaceId()) === WITH_DOCK_ID &&
-    !(await dockTeamMember())
-  )
+  const personal = (await getActiveWorkspaceId()) === WITH_DOCK_ID;
+  if (personal && !(await dockTeamMember()))
     return (
       <main className="mx-auto max-w-lg p-5">
         <DockGate />
@@ -40,17 +38,16 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     workspaces,
     currentWorkspace,
   ] = await Promise.all([
-    getMembers(),
+    personal ? [] : getMembers(),
     getWorkspaceMembers(),
     getGoals(),
     getProjects(),
     getMe(),
-    getWorkspaces(),
+    personal ? [] : getWorkspaces(),
     getCurrentWorkspace(),
   ]);
 
-  const personal = currentWorkspace?.id === WITH_DOCK_ID;
-  const visibleWorkspaces = personal ? [currentWorkspace] : workspaces;
+  const visibleWorkspaces = personal && currentWorkspace ? [currentWorkspace] : workspaces;
   return (
     <TaskUIProvider
       members={members}

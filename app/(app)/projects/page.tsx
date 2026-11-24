@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { dockDeadline } from "@/lib/dock-deadline";
 import Link from "next/link";
 import {
+  getActiveWorkspaceId,
   getAllProjects,
   getCurrentWorkspace,
   getGoals,
@@ -17,20 +18,12 @@ export const dynamic = "force-dynamic";
 export default async function ProjectsPage({
   searchParams,
 }: PageProps<"/projects">) {
-  const [projects, tasks, members, goals, currentWorkspace] = await Promise.all(
-    [
-      getProjects(),
+  if ((await getActiveWorkspaceId()) === "00000000-0000-4000-8000-000000000005") {
+    const tab = String((await searchParams).tab || "active");
+    const [all, tasks, members, steps, customers] = await Promise.all([
+      getAllProjects(),
       getTasks(),
       getWorkspaceMembers(),
-      getGoals(),
-      getCurrentWorkspace(),
-    ],
-  );
-
-  if (currentWorkspace?.id === "00000000-0000-4000-8000-000000000005") {
-    const tab = String((await searchParams).tab || "active");
-    const [all, steps, customers] = await Promise.all([
-      getAllProjects(),
       db
         .from("dock_steps")
         .select("project_id,title,position,completed_on,due_on")
@@ -161,6 +154,9 @@ export default async function ProjectsPage({
       </section>
     );
   }
+  const [projects, tasks, members, goals, currentWorkspace] = await Promise.all([
+    getProjects(), getTasks(), getWorkspaceMembers(), getGoals(), getCurrentWorkspace(),
+  ]);
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
