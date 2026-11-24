@@ -63,6 +63,7 @@ export type Goal = {
 };
 
 export type Project = {
+  dock_customer_id?: string | null;
   id: string;
   workspace_id: string;
   title: string;

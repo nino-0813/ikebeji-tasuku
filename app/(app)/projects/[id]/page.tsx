@@ -1,3 +1,5 @@
+import { DockContract } from "@/components/DockContract";
+import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGoals, getProject, getTasks, getWorkspaceMembers } from "@/lib/data";
@@ -83,7 +85,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </div>
       </div>
 
-      <ProjectDashboard project={project} tasks={mine} />
+      {project.workspace_id===WITH_DOCK_ID ? <DockContract id={project.id} customer={project.dock_customer_id}/> : <ProjectDashboard project={project} tasks={mine} />}
 
       {goal && (
         <Link

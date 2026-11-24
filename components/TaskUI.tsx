@@ -208,6 +208,7 @@ function TaskDialog({
 
   const missing: string[] = [];
   if (!title.trim()) missing.push("タスク名");
+  const dock = currentWorkspace?.id === "00000000-0000-4000-8000-000000000005";
   const fromMeeting = isNew && Boolean(defaults?.candidate_id);
   if (fromMeeting && !projectId) missing.push("プロジェクト");
   if (!ownerId) missing.push("担当者");
@@ -392,7 +393,7 @@ function TaskDialog({
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
+            <div hidden={dock}>
               <label className="label">領域</label>
               <Segmented
                 options={CATEGORIES.map((c) => ({ key: c.key, label: c.label }))}
@@ -472,7 +473,7 @@ function TaskDialog({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
+            <div hidden={dock}>
               <label className="label">優先度</label>
               <Segmented
                 options={PRIORITIES.map((p) => ({ key: p.key, label: p.label }))}
@@ -481,13 +482,13 @@ function TaskDialog({
               />
             </div>
             <div>
-              <label className="label">ステータス</label>
+              {dock ? <label><input type="checkbox" checked={status==="done"} onChange={e=>setStatus(e.target.checked?"done":"todo")}/> 完了</label> : <><label className="label">ステータス</label>
               <Segmented
                 options={STATUSES.map((s) => ({ key: s.key, label: s.label }))}
                 value={status}
                 onChange={(v) => setStatus(v as Task["status"])}
                 small
-              />
+              /></>}
             </div>
           </div>
 

@@ -1,3 +1,6 @@
+import { DockHome } from "@/components/DockHome";
+import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
+import { getActiveWorkspaceId } from "@/lib/data";
 import Link from "next/link";
 import { getGoals, getMeetings, getProjects, getTasks, getWorkspaceMembers } from "@/lib/data";
 import { STALL_DAYS, type Task } from "@/lib/types";
@@ -17,6 +20,7 @@ function byUrgency(a: Task, b: Task) {
 }
 
 export default async function DashboardPage() {
+  if(await getActiveWorkspaceId()===WITH_DOCK_ID) return <DockHome/>;
   const [tasks, members, goals, projects, meetings] = await Promise.all([
     getTasks(),
     getWorkspaceMembers(),

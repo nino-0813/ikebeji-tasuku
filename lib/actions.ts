@@ -21,10 +21,13 @@ export async function signIn(_prev: string | null, form: FormData): Promise<stri
   const expected = process.env.APP_PASSWORD;
   if (!expected) return "APP_PASSWORD が .env.local に設定されていません。";
   const teamKey = process.env.WITHDOCK_TEAM_PASSWORD;
-  const teamLogin = Boolean(teamKey && password === teamKey);
-  if (!teamLogin && password !== expected) return "合言葉が違います。";
-
+  const teamInput = String(form.get("teamPassword") || "");
+  const teamLogin = Boolean(teamKey && teamInput === teamKey);
   const store = await cookies();
+  const alreadySignedIn = store.get(AUTH_COOKIE)?.value === authToken(expected);
+  if (teamInput && !teamLogin) return "チーム用の合言葉を確認してください。";
+  if (!(teamLogin && alreadySignedIn) && password !== expected) return "合言葉が違います。";
+
   const member = String(form.get("member") ?? "");
   if (teamLogin && teamKey) {
     const {data,error} = await db.from("tm_workspace_members").select("member_id")

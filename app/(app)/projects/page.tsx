@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getCurrentWorkspace, getGoals, getProjects, getTasks, getWorkspaceMembers } from "@/lib/data";
 import { ProjectAccordion, NewProjectButton } from "@/components/ProjectParts";
 
@@ -21,7 +22,7 @@ export default async function ProjectsPage() {
             仕事の塊。中のタスクが全部終わっても消えません。次のタスクがまた出てくるからです。
           </p>
         </div>
-        <NewProjectButton goals={goals} />
+        {currentWorkspace?.id==="00000000-0000-4000-8000-000000000005" ? <Link href="/projects/new" className="rounded bg-brand px-4 py-2 font-semibold text-white">＋ 新規案件</Link> : <NewProjectButton goals={goals} />}
       </div>
 
       <ProjectAccordion
