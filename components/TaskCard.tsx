@@ -6,10 +6,16 @@ import type { Member, Task } from "@/lib/types";
 import { daysSince, isStalled } from "@/lib/format";
 import { nudgeTask, setTaskStatus } from "@/lib/actions";
 import { useTaskUI } from "./TaskUI";
-import { Avatar, CategoryBadge, DueChip, PriorityMark, StatusBadge } from "./ui";
+import {
+  Avatar,
+  CategoryBadge,
+  DueChip,
+  PriorityMark,
+  StatusBadge,
+} from "./ui";
 
 /** 完了に送る／未完了に戻す。カードの上で1クリック */
-function DoneToggle({ task }: { task: Task }) {
+export function DoneToggle({ task }: { task: Task }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const done = task.status === "done";
@@ -116,7 +122,9 @@ export function TaskRow({
       >
         {task.title}
         {task.status === "waiting" && task.waiting_on && (
-          <span className="ml-2 text-[11px] text-amber-700">（待ち: {task.waiting_on}）</span>
+          <span className="ml-2 text-[11px] text-amber-700">
+            （待ち: {task.waiting_on}）
+          </span>
         )}
       </p>
       {note && (

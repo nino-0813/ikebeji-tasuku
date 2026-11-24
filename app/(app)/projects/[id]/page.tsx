@@ -1,9 +1,15 @@
+import { DockTaskLine } from "@/components/DockTaskLine";
 import { DockSteps } from "@/components/DockSteps";
 import { DockContract } from "@/components/DockContract";
 import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getGoals, getProject, getTasks, getWorkspaceMembers } from "@/lib/data";
+import {
+  getGoals,
+  getProject,
+  getTasks,
+  getWorkspaceMembers,
+} from "@/lib/data";
 import { daysUntil, isStalled } from "@/lib/format";
 import { goalStats } from "@/lib/goal";
 import { formatValue } from "@/lib/format";
@@ -15,7 +21,9 @@ import { Avatar, CategoryBadge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectPage({ params }: PageProps<"/projects/[id]">) {
+export default async function ProjectPage({
+  params,
+}: PageProps<"/projects/[id]">) {
   const { id } = await params;
   const [project, tasks, members, goals] = await Promise.all([
     getProject(id),
@@ -34,10 +42,85 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const overdue = open.filter((t) => daysUntil(t.due_date) < 0).length;
   const stalled = open.filter(isStalled).length;
 
+  const preview = project.detail
+    ?.split("\n")
+    .find((line) => line.startsWith("プレビュー："))
+    ?.slice(6);
+  if (project.workspace_id === WITH_DOCK_ID)
+    return (
+      <section className="wd-stack">
+        <div className="wd-tabs">
+          <Link href="/projects">← プロジェクト一覧</Link>
+          <span>
+            {project.archived
+              ? "完了"
+              : project.phase === "maintenance"
+                ? "伴走中"
+                : "制作中"}
+          </span>
+          <span className="grow" />
+          {project.dock_customer_id && (
+            <Link href={"/customers?id=" + project.dock_customer_id}>
+              顧客の履歴を見る ↗
+            </Link>
+          )}
+        </div>
+        <div className="wd-split">
+          <section className="wd-panel">
+            <header className="wd-title">
+              <h2>{project.title}</h2>
+              <ProjectSettings project={project} goals={goals} />
+            </header>
+            <div className="wd-note">
+              <b>いま何をしているか</b>
+              <p className="whitespace-pre-line">
+                {project.detail ||
+                  open[0]?.title ||
+                  "作業はまだ登録されていません。"}
+              </p>
+            </div>
+            <DockSteps id={id} archived={project.archived} />
+            <h2 className="wd-title mt-4">
+              タスク
+              <AddTaskButton
+                label="＋ 追加"
+                defaults={{ project_id: id, category: project.category }}
+              />
+            </h2>
+            {mine.map((t) => (
+              <DockTaskLine key={t.id} task={t} members={members} />
+            ))}
+          </section>
+          <aside className="wd-stack content-start">
+            <DockContract
+              id={id}
+              customer={project.dock_customer_id}
+              legal={project.client_name}
+            />
+            <section className="wd-panel">
+              <h2 className="wd-title">制作リンク</h2>
+              {preview?.match(/^https?:\/\//) && (
+                <a className="wd-row" href={preview}>
+                  プレビュー ↗
+                </a>
+              )}
+              {project.client_website?.match(/^https?:\/\//) ? (
+                <a href={project.client_website}>公開サイト ↗</a>
+              ) : (
+                <p>公開サイト未登録</p>
+              )}
+            </section>
+          </aside>
+        </div>
+      </section>
+    );
   return (
     <div className="space-y-7">
       <div>
-        <Link href="/projects" className="text-xs text-ink-mute hover:text-ink-soft">
+        <Link
+          href="/projects"
+          className="text-xs text-ink-mute hover:text-ink-soft"
+        >
           ← プロジェクト一覧
         </Link>
 
@@ -68,11 +151,18 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
           <span className="tnum text-ink-mute">
-            残り <b className="text-ink-soft">{open.length}</b> 件 ・ 完了 {done.length} 件
+            残り <b className="text-ink-soft">{open.length}</b> 件 ・ 完了{" "}
+            {done.length} 件
           </span>
-          {overdue > 0 && <span className="tnum font-semibold text-red-600">期限超過 {overdue}件</span>}
+          {overdue > 0 && (
+            <span className="tnum font-semibold text-red-600">
+              期限超過 {overdue}件
+            </span>
+          )}
           {stalled > 0 && (
-            <span className="tnum font-semibold text-amber-600">止まっている {stalled}件</span>
+            <span className="tnum font-semibold text-amber-600">
+              止まっている {stalled}件
+            </span>
           )}
           <span className="flex -space-x-1.5">
             {members
@@ -86,7 +176,14 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </div>
       </div>
 
-      {project.workspace_id===WITH_DOCK_ID ? <><DockContract id={project.id} customer={project.dock_customer_id}/><DockSteps id={project.id} archived={project.archived}/></> : <ProjectDashboard project={project} tasks={mine} />}
+      {project.workspace_id === WITH_DOCK_ID ? (
+        <>
+          <DockContract id={project.id} customer={project.dock_customer_id} />
+          <DockSteps id={project.id} archived={project.archived} />
+        </>
+      ) : (
+        <ProjectDashboard project={project} tasks={mine} />
+      )}
 
       {goal && (
         <Link
@@ -98,7 +195,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           </span>
           <span className="text-sm font-medium">{goal.title}</span>
           <span className="tnum text-xs text-ink-mute">
-            {formatValue(goal.current_value, goal.unit)} / {formatValue(goal.target_value, goal.unit)}
+            {formatValue(goal.current_value, goal.unit)} /{" "}
+            {formatValue(goal.target_value, goal.unit)}
           </span>
           <span
             className={`tnum text-xs font-semibold ${
@@ -108,7 +206,9 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             {goalStats(goal).onTrack ? "順調" : "遅れ"}
           </span>
           <span className="grow" />
-          <span className="shrink-0 text-xs font-bold text-brand">目標を見る →</span>
+          <span className="shrink-0 text-xs font-bold text-brand">
+            目標を見る →
+          </span>
         </Link>
       )}
 
@@ -116,10 +216,14 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex items-baseline gap-2">
             <div>
-              <p className="text-[11px] font-semibold tracking-wider text-ink-mute">SCHEDULE</p>
+              <p className="text-[11px] font-semibold tracking-wider text-ink-mute">
+                SCHEDULE
+              </p>
               <h2 className="mt-1 text-sm font-bold">制作工程</h2>
             </div>
-            <span className="tnum text-xs text-ink-mute">全{mine.length}件</span>
+            <span className="tnum text-xs text-ink-mute">
+              全{mine.length}件
+            </span>
           </div>
           <span className="grow" />
           <AddTaskButton
@@ -135,8 +239,16 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
         <ProjectTimeline
           tasks={[
-            ...open.sort((a, b) => a.due_date.localeCompare(b.due_date) || a.start_date.localeCompare(b.start_date)),
-            ...done.sort((a, b) => (b.done_at ?? b.updated_at).localeCompare(a.done_at ?? a.updated_at)),
+            ...open.sort(
+              (a, b) =>
+                a.due_date.localeCompare(b.due_date) ||
+                a.start_date.localeCompare(b.start_date),
+            ),
+            ...done.sort((a, b) =>
+              (b.done_at ?? b.updated_at).localeCompare(
+                a.done_at ?? a.updated_at,
+              ),
+            ),
           ]}
           members={members}
         />
