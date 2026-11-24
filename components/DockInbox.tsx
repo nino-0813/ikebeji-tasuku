@@ -80,18 +80,182 @@ export async function DockInbox({
                 {subject}　{items.length}件
               </h3>
               {items.map((p) => (
-                <Link
-                  className="wd-row"
-                  key={p.id}
-                  aria-current={selected?.id === p.id ? "true" : undefined}
-                  href={href(kind, p.id) + "#evidence"}
-                >
-                  <span>
-                    <small>{kinds[p.kind]} ／ 提案</small>
-                    <b>{p.title}</b>
-                  </span>
-                  →
-                </Link>
+                <article key={p.id} className="wd-candidate">
+                  {" "}
+                  <Link
+                    className="wd-row"
+
+                    aria-current={selected?.id === p.id ? "true" : undefined}
+                    href={href(kind, p.id) + "#evidence"}
+                  >
+                    <span>
+                      <small>{kinds[p.kind]} ／ 提案</small>
+                      <b>{p.title}</b>
+                      <small>
+                        {[p.proposed.owner, p.proposed.timing]
+                          .filter(Boolean)
+                          .join("　｜　")}
+                      </small>
+                    </span>
+                    →
+                  </Link>
+                  {selected?.id === p.id ? (
+                    <details className="wd-review" open={id === p.id}>
+                      <summary>内容を確認・修正</summary>{" "}
+                      <form action={reviewProposal} className="mt-3 space-y-2">
+                        <input type="hidden" name="id" value={p.id} />
+                        <input type="hidden" name="version" value={p.version} />
+                        {["pending", "held"].includes(state) && (
+                          <>
+                            <label className="label">
+                              反映する内容
+                              <input
+                                className="field"
+                                name="title"
+                                defaultValue={p.title}
+                                required
+                              />
+                            </label>
+                            {["customer", "project"].includes(p.kind) && (
+                              <label className="label">
+                                対象顧客
+                                <select
+                                  className="field"
+                                  name="customer"
+                                  defaultValue={
+                                    customers.data.find(
+                                      (c) => c.name === p.proposed.subject,
+                                    )?.id || ""
+                                  }
+                                  required={p.kind === "project"}
+                                >
+                                  <option value="">
+                                    {p.kind === "customer"
+                                      ? "新しい顧客"
+                                      : "選択してください"}
+                                  </option>
+                                  {customers.data.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                            {p.kind === "customer" && (
+                              <label className="label">
+                                新規の場合の顧客名
+                                <input
+                                  className="field"
+                                  name="name"
+                                  defaultValue={p.proposed.subject || ""}
+                                />
+                              </label>
+                            )}
+                            {["task", "project"].includes(p.kind) && (
+                              <label className="label">
+                                登録先案件
+                                <select
+                                  className="field"
+                                  name="project"
+                                  defaultValue={
+                                    projects.find(
+                                      (x) => x.title === p.proposed.subject,
+                                    )?.id || ""
+                                  }
+                                  required={p.kind === "task"}
+                                >
+                                  <option value="">
+                                    {p.kind === "project"
+                                      ? "新規案件"
+                                      : "選択してください"}
+                                  </option>
+                                  {projects.map((project) => (
+                                    <option key={project.id} value={project.id}>
+                                      {project.title}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                            {p.kind === "task" && (
+                              <>
+                                <Link
+                                  className="text-brand underline"
+                                  href="/projects/new"
+                                  target="_blank"
+                                >
+                                  新規案件を作成
+                                </Link>
+                                <label className="label">
+                                  担当（発言　{p.proposed.owner || "未指定"}）
+                                  <select
+                                    name="owner"
+                                    className="field"
+                                    required
+                                    defaultValue={
+                                      members.find(
+                                        (m) => m.name === p.proposed.owner,
+                                      )?.id || ""
+                                    }
+                                  >
+                                    <option value="">担当を選択</option>
+                                    {members.map((m) => (
+                                      <option key={m.id} value={m.id}>
+                                        {m.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="label">
+                                  期限（発言　{p.proposed.timing || "未指定"}）
+                                  <input
+                                    className="field"
+                                    type="date"
+                                    name="due"
+                                    required
+                                  />
+                                </label>
+                              </>
+                            )}
+                            <div className="flex gap-4">
+                              <button
+                                className="text-brand font-bold"
+                                name="decision"
+                                value="approved"
+                              >
+                                内容を承認して反映
+                              </button>
+                              <button
+                                formNoValidate
+                                name="decision"
+                                value={state === "held" ? "pending" : "held"}
+                              >
+                                {state === "held" ? "承認待ちに戻す" : "保留"}
+                              </button>
+                              <button
+                                formNoValidate
+                                name="decision"
+                                value="archived"
+                              >
+                                削除
+                              </button>
+                            </div>
+                          </>
+                        )}
+                        {state === "archived" && (
+                          <button name="decision" value="restore">
+                            復元
+                          </button>
+                        )}
+                      </form>
+                    </details>
+                  ) : (
+                    <Link className="wd-review-link" href={href(kind, p.id)}>
+                      内容を確認 →
+                    </Link>
+                  )}
+                </article>
               ))}
             </section>
           ))}
@@ -132,7 +296,10 @@ export async function DockInbox({
                         ?.detail || "未設定"}
                     </p>
                   )}
-                <blockquote className="wd-note my-3">{p.quote}</blockquote>
+                <blockquote className="wd-note my-3">
+                  <b>録音からの提案</b>
+                  <p>{p.quote}</p>
+                </blockquote>
                 <a
                   href={
                     "https://withdock-workspace.vercel.app/#meetings/" +
@@ -142,148 +309,24 @@ export async function DockInbox({
                 >
                   {p.meeting_title}
                 </a>
-                <form action={reviewProposal} className="mt-3 space-y-2">
-                  <input type="hidden" name="id" value={p.id} />
-                  <input type="hidden" name="version" value={p.version} />
-                  {["pending", "held"].includes(state) && (
-                    <>
-                      <label className="label">
-                        反映する内容
-                        <input
-                          className="field"
-                          name="title"
-                          defaultValue={p.title}
-                          required
-                        />
-                      </label>
-                      {["customer", "project"].includes(p.kind) && (
-                        <label className="label">
-                          対象顧客
-                          <select
-                            className="field"
-                            name="customer"
-                            defaultValue={
-                              customers.data.find(
-                                (c) => c.name === p.proposed.subject,
-                              )?.id || ""
-                            }
-                            required={p.kind === "project"}
-                          >
-                            <option value="">
-                              {p.kind === "customer"
-                                ? "新しい顧客"
-                                : "選択してください"}
-                            </option>
-                            {customers.data.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                      {p.kind === "customer" && (
-                        <label className="label">
-                          新規の場合の顧客名
-                          <input
-                            className="field"
-                            name="name"
-                            defaultValue={p.proposed.subject || ""}
-                          />
-                        </label>
-                      )}
-                      {["task", "project"].includes(p.kind) && (
-                        <label className="label">
-                          登録先案件
-                          <select
-                            className="field"
-                            name="project"
-                            defaultValue={
-                              projects.find(
-                                (x) => x.title === p.proposed.subject,
-                              )?.id || ""
-                            }
-                            required={p.kind === "task"}
-                          >
-                            <option value="">
-                              {p.kind === "project"
-                                ? "新規案件"
-                                : "選択してください"}
-                            </option>
-                            {projects.map((project) => (
-                              <option key={project.id} value={project.id}>
-                                {project.title}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                      {p.kind === "task" && (
-                        <>
-                          <Link
-                            className="text-brand underline"
-                            href="/projects/new"
-                            target="_blank"
-                          >
-                            新規案件を作成
-                          </Link>
-                          <label className="label">
-                            担当（発言　{p.proposed.owner || "未指定"}）
-                            <select
-                              name="owner"
-                              className="field"
-                              required
-                              defaultValue={
-                                members.find((m) => m.name === p.proposed.owner)
-                                  ?.id || ""
-                              }
-                            >
-                              <option value="">担当を選択</option>
-                              {members.map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="label">
-                            期限（発言　{p.proposed.timing || "未指定"}）
-                            <input
-                              className="field"
-                              type="date"
-                              name="due"
-                              required
-                            />
-                          </label>
-                        </>
-                      )}
-                      <div className="flex gap-4">
-                        <button
-                          className="text-brand font-bold"
-                          name="decision"
-                          value="approved"
-                        >
-                          内容を承認して反映
-                        </button>
-                        <button
-                          formNoValidate
-                          name="decision"
-                          value={state === "held" ? "pending" : "held"}
-                        >
-                          {state === "held" ? "承認待ちに戻す" : "保留"}
-                        </button>
-                        <button formNoValidate name="decision" value="archived">
-                          削除
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  {state === "archived" && (
-                    <button name="decision" value="restore">
-                      復元
-                    </button>
-                  )}
-                </form>
+                <div className="wd-row">
+                  状態
+                  <b>
+                    {
+                      (
+                        {
+                          pending: "未承認",
+                          held: "保留",
+                          approved: "承認済み",
+                          archived: "削除済み",
+                        } as Record<string, string>
+                      )[state]
+                    }
+                  </b>
+                </div>
+                <p className="wd-notice">
+                  承認前に元の発言と反映内容を確認してください。
+                </p>
               </div>
             ))
           ) : (

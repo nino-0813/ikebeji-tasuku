@@ -120,6 +120,18 @@ export default async function ProjectsPage({
                     "未登録"}
                 </p>
                 <p>現在　{current?.title || next?.title || "未設定"}</p>
+                <p>
+                  担当　
+                  {p.detail
+                    ?.split("\n")
+                    .find((line) => line.startsWith("担当："))
+                    ?.slice(3) ||
+                    members
+                      .filter((m) => mine.some((t) => t.owner_id === m.id))
+                      .map((m) => m.name)
+                      .join(" / ") ||
+                    "未設定"}
+                </p>
                 <small>{risk?.label}</small>
                 {mine.slice(0, 3).map((t) => (
                   <DockTaskLine key={t.id} task={t} members={members} />

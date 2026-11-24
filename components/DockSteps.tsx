@@ -47,12 +47,15 @@ export async function DockSteps({
         制作工程・スケジュール　{done} / {data.length}
       </h2>
       {data.map((s) => (
-        <div key={s.id} className="border-t py-2">
+        <div key={s.id} className="wd-gantt-row">
           <p>
-            <strong>{s.title}</strong>　{s.starts_on || "未定"} 〜{" "}
-            {s.due_on || "未定"}
+            <strong>{s.title}</strong>
+            <small className="block">
+              {s.starts_on?.slice(5) || "未定"} ～{" "}
+              {s.due_on?.slice(5) || "未定"}
+            </small>
           </p>
-          {s.starts_on && s.due_on && (
+          {s.starts_on && s.due_on ? (
             <div className="wd-track my-2">
               <i
                 style={{
@@ -78,9 +81,17 @@ export async function DockSteps({
                 }}
               />
             </div>
+          ) : (
+            <small>日程未設定</small>
           )}
           <details>
-            <summary>{s.completed_on ? "完了日を変更" : "完了を記録"}</summary>
+            <summary>
+              {s.completed_on
+                ? "完了"
+                : s.id === current?.id
+                  ? "進行中"
+                  : "未着手"}
+            </summary>
             <form
               action={finishStep}
               className="flex flex-wrap items-end gap-2"

@@ -57,12 +57,14 @@ export default async function Improvements({
           </a>
         ))}
         <span className="grow" />
-        <a href="/improvements?tab=adopted">採用履歴を見る ↗</a>
+        <a className="wd-accent" href="/improvements?tab=adopted">
+          採用履歴を見る ↗
+        </a>
       </nav>
       <div className="wd-three">
         {!visible.length && <p>この条件の改善提案はありません。</p>}
         {visible.map((p) => (
-          <article key={p.id} className="card space-y-2 p-4">
+          <article key={p.id} className="wd-idea card space-y-2 p-4">
             <small>
               {source(p) === "ai"
                 ? "AI GENERATED ／ AIから"

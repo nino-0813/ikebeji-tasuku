@@ -125,6 +125,17 @@ export default async function CashPage({ searchParams }: PageProps<"/cash">) {
           <div key={label} className="wd-panel wd-stat">
             <span>{label}</span>
             <strong>{value}</strong>
+            <small>
+              {label === "今月の目標"
+                ? kind === "recurring"
+                  ? "継続支援費"
+                  : kind === "one_off"
+                    ? "単発制作費"
+                    : "単発制作費 ＋ 継続支援費"
+                : label === "今月の実入金"
+                  ? "入金済みを計上"
+                  : "確定・想定を含む"}
+            </small>
           </div>
         ))}
       </div>

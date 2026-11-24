@@ -34,49 +34,65 @@ export default async function Customers({
     : null;
   if (history?.error) throw new Error("顧客履歴を取得できませんでした。");
   return (
-    <div className="space-y-5">
+    <div className="wd-stack">
       <h1 className="text-xl font-bold">顧客理解</h1>
-      <nav className="wd-tabs">
-        {Object.entries({
-          "": "すべての顧客",
-          lead: "リスト段階",
-          negotiation: "商談中",
-        }).map(([key, label]) => (
-          <Link
-            href={"/customers?stage=" + key}
-            key={key}
-            aria-current={(stage || "") === key ? "page" : undefined}
-          >
-            {label} {list.data.filter((c) => !key || c.stage === key).length}
-          </Link>
-        ))}
-      </nav>
-      <details className="card p-4">
-        <summary>顧客を登録</summary>
-        <form action={addCustomer} className="space-y-2">
-          <label className="label">
-            顧客名
-            <input required className="field" name="name" />
-          </label>
-          <label className="label">
-            状況
-            <select className="field" name="stage">
-              <option value="lead">リスト段階</option>
-              <option value="negotiation">商談中</option>
-              <option value="active">取引中</option>
-            </select>
-          </label>
-          <label className="label">
-            事業背景・関心
-            <textarea name="summary" className="field" />
-          </label>
-          <label className="label">
-            次のアクション
-            <input name="next_action" className="field" />
-          </label>
-          <button className="text-brand">登録する</button>
-        </form>
-      </details>
+      <div className="wd-toolbar">
+        <nav className="wd-tabs">
+          {Object.entries({
+            "": "すべての顧客",
+            lead: "リスト段階",
+            negotiation: "商談中",
+          }).map(([key, label]) => (
+            <Link
+              href={"/customers?stage=" + key}
+              key={key}
+              aria-current={(stage || "") === key ? "page" : undefined}
+            >
+              {label} {list.data.filter((c) => !key || c.stage === key).length}
+            </Link>
+          ))}
+        </nav>
+        <div className="flex gap-2 items-start">
+          <details className="wd-edit">
+            <summary>顧客を登録</summary>
+            <form action={addCustomer} className="space-y-2">
+              <label className="label">
+                顧客名
+                <input required className="field" name="name" />
+              </label>
+              <label className="label">
+                状況
+                <select className="field" name="stage">
+                  <option value="lead">リスト段階</option>
+                  <option value="negotiation">商談中</option>
+                  <option value="active">取引中</option>
+                </select>
+              </label>
+              <label className="label">
+                事業背景・関心
+                <textarea name="summary" className="field" />
+              </label>
+              <label className="label">
+                次のアクション
+                <input name="next_action" className="field" />
+              </label>
+              <button className="text-brand">登録する</button>
+            </form>
+          </details>
+          {selected && (
+            <a
+              className="wd-primary"
+              href={
+                selected.history_url?.startsWith("https://")
+                  ? selected.history_url
+                  : "#history"
+              }
+            >
+              顧客履歴を参照 ↗
+            </a>
+          )}
+        </div>
+      </div>
       <div className="wd-customer">
         <section className="wd-panel">
           <h2 className="wd-title">顧客一覧</h2>{" "}
@@ -127,7 +143,10 @@ export default async function Customers({
         <article className="wd-panel">
           {selected ? (
             <>
-              <h2 className="wd-title">{selected.name}｜顧客理解</h2>
+              <h2 className="wd-title">
+                {selected.name}｜顧客理解{" "}
+                <small>顧客ID {selected.id.slice(0, 8)}</small>
+              </h2>
               <div className="wd-three">
                 {[
                   ["地域", selected.prefecture],
@@ -168,7 +187,9 @@ export default async function Customers({
                   顧客履歴ドキュメントを開く ↗
                 </a>
               )}
-              <h3 className="wd-title mt-4">最近の情報更新</h3>
+              <h3 id="history" className="wd-title mt-4">
+                最近の情報更新
+              </h3>
               {history?.data?.map((h) => (
                 <p className="wd-row" key={h.id}>
                   {h.created_at.slice(0, 10)}　{h.body}{" "}

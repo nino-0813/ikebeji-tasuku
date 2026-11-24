@@ -26,7 +26,17 @@ export default async function Settings() {
             <span className="flex items-center gap-3">
               <b
                 className="grid size-9 place-items-center rounded-full text-white"
-                style={{ background: m.color }}
+                style={{
+                  background:
+                    (
+                      {
+                        ninomiya: "#308578",
+                        honma: "#cd803a",
+                        toru: "#5587bb",
+                        goda: "#8869aa",
+                      } as Record<string, string>
+                    )[m.id] || m.color,
+                }}
               >
                 {m.id === "goda" ? "合" : m.name[0]}
               </b>
@@ -57,14 +67,15 @@ export default async function Settings() {
         <p className="wd-row">
           提案の最終受信
           <b>
-            {last.data?.[0]
+            {last.data?.[0]?.created_at &&
+            Number.isFinite(Date.parse(last.data[0].created_at))
               ? new Date(last.data[0].created_at).toLocaleString("ja-JP", {
                   timeZone: "Asia/Tokyo",
                 })
               : "受信記録なし"}
           </b>
         </p>
-        <div className="wd-note mt-4">
+        <div className="wd-notice mt-4">
           会議から抽出した候補は、チームが承認すると反映されます。
         </div>
       </section>

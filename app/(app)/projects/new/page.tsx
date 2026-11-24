@@ -57,7 +57,7 @@ export default async function NewProject() {
             <input type="date" name="finish" className="field" />
           </label>
         </div>
-        <details className="my-4">
+        <details open className="my-4 wd-supplement">
           <summary>会社・契約用の補足情報</summary>
           <div className="grid gap-3 sm:grid-cols-2">
             {[
@@ -82,6 +82,12 @@ export default async function NewProject() {
         <div className="wd-note">
           同じ会社の案件は既存の顧客を選択してください。複数の案件から共通の顧客履歴を参照できます。
         </div>
+        <p className="wd-row">
+          顧客情報<b>顧客理解で共有</b>
+        </p>
+        <p className="wd-row">
+          案件ごとに登録<b>契約・担当・工程</b>
+        </p>
         <Link className="wd-row" href="/customers">
           新しい顧客を登録 →
         </Link>

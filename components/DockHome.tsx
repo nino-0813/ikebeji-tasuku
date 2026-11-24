@@ -21,7 +21,7 @@ export async function DockHome() {
     getProjects(),
     db
       .from("dock_proposals")
-      .select("id", { count: "exact", head: true })
+      .select("kind", { count: "exact" })
       .eq("state", "pending"),
     db
       .from("dock_payments")
@@ -66,6 +66,27 @@ export async function DockHome() {
           <Link href={url} key={label} className="wd-panel wd-stat">
             <p className="text-sm">{label}</p>
             <strong className="text-xl">{value}</strong>
+            <small>
+              {url === "/inbox"
+                ? Object.entries({
+                    customer: "顧客",
+                    project: "案件",
+                    task: "タスク",
+                    improvement: "改善",
+                  })
+                    .map(
+                      ([key, name]) =>
+                        name +
+                        " " +
+                        pending.data.filter((p) => p.kind === key).length,
+                    )
+                    .join(" / ")
+                : url === "#due"
+                  ? "担当作業と期限"
+                  : label === "今月の実入金"
+                    ? "入金日を基準に集計"
+                    : "月別目標と実入金の差"}
+            </small>
           </Link>
         ))}
       </div>
@@ -76,7 +97,7 @@ export async function DockHome() {
           </h2>
           {due.slice(0, 5).map((t) => (
             <Link
-              className="wd-row"
+              className="wd-row wd-signal amber"
               href={t.project_id ? "/projects/" + t.project_id : "/today"}
               key={t.id}
             >
@@ -90,14 +111,14 @@ export async function DockHome() {
           {!due.length && (
             <p className="wd-row">期限を迎えた担当作業はありません。</p>
           )}
-          <Link className="wd-row" href="/inbox">
+          <Link className="wd-row wd-signal blue" href="/inbox">
             <b>AI抽出の承認待ち</b>
             <span>{pending.count || 0} 件 →</span>
           </Link>
           {tasks.some(
             (t) => t.status !== "done" && t.due_date < today && t.project_id,
           ) && (
-            <Link className="wd-row" href="/projects">
+            <Link className="wd-row wd-signal rose" href="/projects">
               <b>要確認の案件</b>
               <span>期限を過ぎた作業があります →</span>
             </Link>

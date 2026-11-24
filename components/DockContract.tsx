@@ -41,32 +41,37 @@ export async function DockContract({
           顧客の背景・履歴を見る
         </Link>
       )}
-      <form action={assignCustomer} className="flex items-end gap-2">
-        {project}
-        <label>
-          顧客
-          <select
-            className="field"
-            name="customer"
-            required
-            defaultValue={customer || ""}
-          >
-            <option value="">選択してください</option>
-            {customers.data.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button>紐付けを保存</button>
-      </form>
+      <details open={!customer}>
+        <summary>顧客の紐付けを変更</summary>
+        <form action={assignCustomer} className="flex items-end gap-2">
+          {project}
+          <label>
+            顧客
+            <select
+              className="field"
+              name="customer"
+              required
+              defaultValue={customer || ""}
+            >
+              <option value="">選択してください</option>
+              {customers.data.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button>紐付けを保存</button>
+        </form>
+      </details>
       {contracts.data.map((c) => (
         <div key={c.id}>
           <strong>
             {c.legal_name} · {c.kind === "one_off" ? "単発制作" : "継続支援"}
           </strong>
-          <p>{c.scope}</p>
+          <p className="wd-row">
+            提供範囲<b>{c.scope || "未登録"}</b>
+          </p>
           {c.free_support_terms && <p>無償対応　{c.free_support_terms}</p>}
         </div>
       ))}
