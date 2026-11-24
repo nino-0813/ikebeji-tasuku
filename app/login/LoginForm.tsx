@@ -5,7 +5,7 @@ import type { Member } from "@/lib/types";
 import { signIn } from "@/lib/actions";
 import { Avatar } from "@/components/ui";
 
-export function LoginForm({ members }: { members: Member[] }) {
+export function LoginForm({ members,team }: { members: Member[]; team:boolean }) {
   const [error, action, pending] = useActionState(signIn, null);
   const [member, setMember] = useState(members[0]?.id ?? "");
 
@@ -51,7 +51,7 @@ export function LoginForm({ members }: { members: Member[] }) {
         />
       </div>
 
-      <details className="text-sm"><summary className="cursor-pointer font-semibold">with dock チームログイン</summary>
+      <details className="text-sm" open={team}><summary className="cursor-pointer font-semibold">with dock チームログイン</summary>
         <label className="label mt-3" htmlFor="teamPassword">チーム用の合言葉</label>
         <input id="teamPassword" type="password" name="teamPassword" autoComplete="off" className="field"/>
         <p className="mt-2 text-xs">初回は上のボード用合言葉も入力してください。</p></details>

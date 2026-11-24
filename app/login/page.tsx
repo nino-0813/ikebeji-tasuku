@@ -5,7 +5,7 @@ import { LoginForm } from "./LoginForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({searchParams}:PageProps<"/login">) {
   if (!isConfigured()) return <SetupNotice />;
   const members = await getMembers();
   return (
@@ -17,7 +17,7 @@ export default async function LoginPage() {
           </span>
           <span className="text-base font-bold">イケベジ 進行ボード</span>
         </div>
-        <LoginForm members={members} />
+        <LoginForm members={members} team={(await searchParams).team==="withdock"} />
       </div>
     </main>
   );

@@ -38,7 +38,10 @@ export async function signIn(_prev: string | null, form: FormData): Promise<stri
       httpOnly:true, sameSite:"lax", secure:process.env.NODE_ENV==="production", path:"/",maxAge
     });
     store.set(WORKSPACE_COOKIE,WITH_DOCK_ID,{httpOnly:true,sameSite:"lax",path:"/"});
-  } else store.delete(TEAM_COOKIE);
+  } else {
+    store.delete(TEAM_COOKIE);
+    if(store.get(WORKSPACE_COOKIE)?.value===WITH_DOCK_ID) store.delete(WORKSPACE_COOKIE);
+  }
   store.set(AUTH_COOKIE, authToken(expected), {
     httpOnly: true,
     sameSite: "lax",
