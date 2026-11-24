@@ -1,7 +1,8 @@
 "use client";
-import { boardPages } from "@/lib/board-pages";
+import { setWorkspace } from "@/lib/actions";
+import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 const pages = [
@@ -15,11 +16,14 @@ const pages = [
 ];
 export function DockShell({
   children,
-  user,
+  user, workspaces,
 }: {
   children: ReactNode;
   user: string;
+  workspaces: { id: string; name: string }[];
 }) {
+  const router = useRouter();
+  const [error, setError] = useState("");
   const path = usePathname();
   const [menu, setMenu] = useState(false);
   const page = pages.find(
@@ -45,9 +49,14 @@ export function DockShell({
         <details className="wd-switch">
           <summary className="wd-workspace" aria-label="ページを切り替える。現在はwith dock">◆　with dock　⌄</summary>
           <div>
-            {boardPages.map(({ id, name }) => (
-              <Link key={id} href={"/login?workspace=" + id}>{name}</Link>
+            {workspaces.filter(page => page.id !== WITH_DOCK_ID).map(({ id, name }) => (
+              <button key={id} className="block w-full p-2 text-left" onClick={async () => {
+                const result = await setWorkspace(id);
+                if (result.error) setError(result.error);
+                else { router.push("/"); router.refresh(); }
+              }}>{name}</button>
             ))}
+            {error && <p role="alert">{error}</p>}
             <span aria-current="true">✓　with dock</span>
           </div>
         </details>

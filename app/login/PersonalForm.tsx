@@ -2,7 +2,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { personalLogin } from "./personal";
 
-export function PersonalForm() {
+export function PersonalForm({ workspace }: { workspace: string }) {
   const [code, setCode] = useState<string | null>(null);
   const [error, action, pending] = useActionState(personalLogin, null);
   useEffect(() => {
@@ -15,6 +15,7 @@ export function PersonalForm() {
   return <form action={action} className="card space-y-4 p-5">
     <h1 className="text-xl font-bold">{setup ? "初回登録" : "ログイン"}</h1>
     {setup && <p>ご自身のメールアドレスと、12文字以上のパスワードを設定してください。</p>}
+    <input type="hidden" name="workspace" value={workspace} />
     <input type="hidden" name="invite" value={code || ""} />
     <label className="label">メールアドレス<input className="field" type="email" name="email" required autoComplete="username" /></label>
     <label className="label">パスワード<input className="field" type="password" name="password" required minLength={setup ? 12 : 1} autoComplete={setup ? "new-password" : "current-password"} /></label>

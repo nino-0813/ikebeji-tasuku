@@ -1,8 +1,8 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { AUTH_COOKIE, authToken } from "./auth";
-import { dockTeamMember } from "./dock-team";
-import { TEAM_COOKIE } from "./dock-identity";
+import { isTeamPage } from "./board-pages";
+import { signedInMember } from "./dock-team";
+import { canOpenWorkspace } from "./dock-identity";
 import { WITH_DOCK_ID } from "./meeting-inbox";
 import { db } from "./supabase";
 import type { Comment, Goal, GoalLog, InboxItem, Meeting, Member, Project, Subtask, Task, Workspace } from "./types";
@@ -24,7 +24,8 @@ export const getWorkspaces = cache(async function getWorkspaces(): Promise<Works
   ]);
   if (error) throw error;
   if (membershipError) throw membershipError;
-  return (data ?? []).map((workspace) => ({
+  const memberId = await signedInMember();
+  return (data ?? []).filter(w => memberId && (isTeamPage(w.id) || (memberships ?? []).some(m => m.workspace_id === w.id && relatedMember(m.tm_members)?.id === memberId))).map((workspace) => ({
     ...workspace,
     members: (memberships ?? [])
       .filter((membership) => membership.workspace_id === workspace.id)
@@ -49,27 +50,13 @@ export const getWorkspaceMembers = cache(async function getWorkspaceMembers(): P
 
 export const getActiveWorkspaceId = cache(async function getActiveWorkspaceId(): Promise<string> {
   const store = await cookies();
-  if (store.has(TEAM_COOKIE)) {
-    if (await dockTeamMember()) return WITH_DOCK_ID;
-    throw new Error("ログインしてください。");
-  }
-  const id = store.get(WORKSPACE_COOKIE)?.value || DEFAULT_WORKSPACE_ID;
-  const password = process.env.APP_PASSWORD;
-  if (!password || store.get(AUTH_COOKIE)?.value !== authToken(password) || id === WITH_DOCK_ID)
-    throw new Error("ログインしてください。");
+  const member = await signedInMember();
+  const id = store.get(WORKSPACE_COOKIE)?.value || WITH_DOCK_ID;
+  if (!member || !(await canOpenWorkspace(member, id))) throw new Error("ログインしてください。");
   return id;
 });
 
 export const getCurrentWorkspace = cache(async function getCurrentWorkspace(): Promise<Workspace | null> {
-  if ((await cookies()).has(TEAM_COOKIE)) {
-    const id = await getActiveWorkspaceId();
-    const [workspace, members] = await Promise.all([
-      db.from("tm_workspaces").select("*").eq("id", id).single(),
-      getWorkspaceMembers(),
-    ]);
-    if (workspace.error) throw workspace.error;
-    return { ...workspace.data, members };
-  }
   const [workspaces, activeId] = await Promise.all([getWorkspaces(), getActiveWorkspaceId()]);
   return workspaces.find((workspace) => workspace.id === activeId) ?? workspaces[0] ?? null;
 });
@@ -82,10 +69,9 @@ export const getMembers = cache(async function getMembers(): Promise<Member[]> {
 
 /** 「今このブラウザを使っているのは誰か」。未設定なら null */
 export const getMe = cache(async function getMe(): Promise<Member | null> {
-  const store = await cookies();
-  const id = store.has(TEAM_COOKIE) ? await dockTeamMember() : store.get(ME_COOKIE)?.value;
+  const id = await signedInMember();
   if (!id) return null;
-  const members = store.has(TEAM_COOKIE) ? await getWorkspaceMembers() : await getMembers();
+  const members = await getMembers();
   return members.find((m) => m.id === id) ?? null;
 });
 

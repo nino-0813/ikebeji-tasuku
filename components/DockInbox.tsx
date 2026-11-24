@@ -20,7 +20,7 @@ export async function DockInbox({
   id: string;
 }) {
   if (!(await dockTeamMember()))
-    return <Link href="/login">with dockのチーム用合言葉でログイン</Link>;
+    return <Link href="/login">メールアドレスとパスワードでログイン</Link>;
   const [proposals, customers, projects, members] = await Promise.all([
     db
       .from("dock_proposals")

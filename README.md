@@ -36,7 +36,6 @@ Supabase の管理画面 → **SQL Editor** を開き、[`supabase/schema.sql`](
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://hgsnmzudqvgznvagtapu.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=（Project Settings → API Keys → service_role）
-APP_PASSWORD=（3人で共有する合言葉）
 ```
 
 `service_role` キーはサーバー側でしか使わず、ブラウザには一切出ない。外部に共有しないこと。
@@ -47,7 +46,7 @@ APP_PASSWORD=（3人で共有する合言葉）
 npm run dev
 ```
 
-http://localhost:3000 を開き、自分を選んで合言葉を入れる。
+http://localhost:3000 を開き、自分のメールアドレスとパスワードでログインする。
 
 ---
 
@@ -140,7 +139,7 @@ http://localhost:3000 を開き、自分を選んで合言葉を入れる。
 app/
   (app)/            ログイン後の画面（ホーム / 今日 / Inbox / ボード / 打ち合わせ / 目標）
   (app)/projects/[id]/   プロジェクト詳細
-  login/            合言葉と「自分は誰か」
+  login/            招待登録と個人ログイン
   api/tasks/[id]/   タスクのやり取り・サブタスク取得
 components/         UI
 lib/
@@ -150,7 +149,7 @@ lib/
   goal.ts           目標のペース計算
 supabase/schema.sql      DB定義（丸ごと流せば最新になる）
 supabase/migrations/     途中から足した分だけの差分SQL
-proxy.ts            合言葉による入口のガード
+proxy.ts            個人ログインによるアクセス制御
 ```
 
 DB のテーブルは全て `tm_` 接頭辞。RLS は有効で公開ポリシーを持たないため、

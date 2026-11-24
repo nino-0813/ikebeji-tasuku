@@ -7,7 +7,8 @@ import { db } from "@/lib/supabase";
 import { invitation, TEAM_COOKIE, teamIdentity } from "@/lib/dock-identity";
 import { ME_COOKIE, WORKSPACE_COOKIE } from "@/lib/data";
 import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
-import { AUTH_COOKIE } from "@/lib/auth";
+import { DEFAULT_WORKSPACE_ID } from "@/lib/data";
+import { isTeamPage } from "@/lib/board-pages";
 
 export async function personalLogin(_previous: string | null, form: FormData): Promise<string | null> {
   const code = String(form.get("invite") || "");
@@ -36,9 +37,10 @@ export async function personalLogin(_previous: string | null, form: FormData): P
   if (!member) return "このアカウントではウィズドックを開けません。";
   const store = await cookies();
   const options = { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/" };
-  store.delete(AUTH_COOKIE);
+  store.delete("tm_auth");
   store.set(TEAM_COOKIE, session.access_token, { ...options, maxAge: session.expires_in });
-  store.set(WORKSPACE_COOKIE, WITH_DOCK_ID, options);
+  const target = String(form.get("workspace") || store.get(WORKSPACE_COOKIE)?.value || DEFAULT_WORKSPACE_ID);
+  store.set(WORKSPACE_COOKIE, isTeamPage(target) ? target : DEFAULT_WORKSPACE_ID, options);
   store.set(ME_COOKIE, member, options);
   redirect("/");
 }

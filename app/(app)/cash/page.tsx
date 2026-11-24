@@ -18,7 +18,7 @@ export default async function CashPage({ searchParams }: PageProps<"/cash">) {
     return (
       <section>
         <h1>目標・入金</h1>
-        <p>with dockのチーム用合言葉でログインしてください。</p>
+        <p>メールアドレスとパスワードでログインしてください。</p>
       </section>
     );
   const query = await searchParams;

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE, authToken } from "./lib/auth";
-import { TEAM_COOKIE, teamIdentity } from "./lib/dock-identity";
+
+import { TEAM_COOKIE, teamIdentity, canOpenWorkspace } from "./lib/dock-identity";
 import { WITH_DOCK_ID } from "./lib/meeting-inbox";
 import { db } from "./lib/supabase";
 
@@ -12,21 +12,20 @@ export default async function proxy(request: NextRequest) {
   if (personal) {
     const member = await teamIdentity(personal);
     if (member) {
+      const selected = workspace || WITH_DOCK_ID;
+      if (!(await canOpenWorkspace(member, selected))) return new NextResponse("ページを開く権限がありません。", { status: 403 });
       const task = path.match(/^\/api\/tasks\/([^/]+)/);
       if (task) {
-        const { data } = await db.from("tm_tasks").select("id").eq("id", task[1]).eq("workspace_id", WITH_DOCK_ID).maybeSingle();
+        const { data } = await db.from("tm_tasks").select("id").eq("id", task[1]).eq("workspace_id", selected).maybeSingle();
         if (!data) return new NextResponse(null, { status: 404 });
       }
-      request.cookies.set("tm_workspace", WITH_DOCK_ID);
+      request.cookies.set("tm_workspace", selected);
       request.cookies.set("tm_me", member);
       return NextResponse.next({ request: { headers: request.headers } });
     }
-  } else {
-    const expected = process.env.APP_PASSWORD;
-    if (expected && request.cookies.get(AUTH_COOKIE)?.value === authToken(expected) && workspace !== WITH_DOCK_ID) return NextResponse.next();
   }
   const url = new URL("/login", request.url);
-  if (personal || workspace === WITH_DOCK_ID) url.searchParams.set("team","withdock");
+  if (workspace === WITH_DOCK_ID) url.searchParams.set("team","withdock");
   return NextResponse.redirect(url);
 }
 export const config = {

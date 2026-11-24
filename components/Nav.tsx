@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useState, useTransition } from "react";
 import type { Member, Workspace } from "@/lib/types";
-import { createWorkspace, setMe, setWorkspace, signOut } from "@/lib/actions";
+import { createWorkspace, setWorkspace, signOut } from "@/lib/actions";
 import { useTaskUI } from "./TaskUI";
 import { Avatar } from "./ui";
 
-import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
+
 
 const LINKS = [
   { href: "/", label: "ホーム", icon: "home" },
@@ -72,7 +72,7 @@ export function Nav({
           <Icon name="plus" />
         </button>
         <div className="sidebar-spacer" />
-        <div className="sidebar-footer"><MeSwitcher members={members} me={me} /></div>
+        <div className="sidebar-footer"><form action={signOut} className="profile-button"><Avatar member={me} size={20} /><span>{me?.name}</span><button className="ml-auto text-xs underline">ログアウト</button></form></div>
       </div>
     </aside>
   );
@@ -112,10 +112,6 @@ function WorkspaceSwitcher({
   const [pending, start] = useTransition();
 
   const selectWorkspace = (id: string) => {
-    if (id === WITH_DOCK_ID) {
-      router.push("/login?team=withdock");
-      return;
-    }
     setError("");
     start(async () => {
       const result = await setWorkspace(id);
@@ -239,58 +235,6 @@ function WorkspaceSwitcher({
                 <span>新しいページを追加</span>
               </button>
             )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function MeSwitcher({ members, me }: { members: Member[]; me: Member | null }) {
-  const [open, setOpen] = useState(false);
-  const [, start] = useTransition();
-
-  return (
-    <div className="relative w-full">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="profile-button"
-        aria-expanded={open}
-      >
-        <Avatar member={me} size={20} />
-        <span className="min-w-0 flex-1 truncate text-left">{me?.name ?? "自分を選ぶ"}</span>
-        <Icon name="chevrons" />
-      </button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="profile-menu pop-in card absolute right-0 z-20 w-52 py-1 shadow-lg">
-            <p className="px-3 py-1 text-[11px] text-ink-mute">自分は誰？</p>
-            {members.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => {
-                  setOpen(false);
-                  start(() => {
-                    setMe(m.id);
-                  });
-                }}
-                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-stone-50 ${
-                  me?.id === m.id ? "font-bold text-ink" : "text-ink-soft"
-                }`}
-              >
-                <Avatar member={m} size={20} />
-                {m.name}
-              </button>
-            ))}
-            <div className="my-1 border-t border-line" />
-            <button
-              onClick={() => start(() => void signOut())}
-              className="w-full px-3 py-1.5 text-left text-xs text-ink-mute hover:bg-stone-50"
-            >
-              ログアウト
-            </button>
           </div>
         </>
       )}

@@ -1,3 +1,4 @@
+import { isTeamPage } from "./board-pages";
 import { createHash } from "node:crypto";
 import identities from "./dock-invitations.json";
 import { db } from "./supabase";
@@ -21,4 +22,11 @@ export async function teamIdentity(token: string | undefined) {
   if (auth.error || !user || membership.error) return null;
   const member = entries.find(([, identity]) => identity.id === user.id)?.[0];
   return member && membership.data.some(row => row.member_id === member) ? member : null;
+}
+
+export async function canOpenWorkspace(member: string, id: string) {
+  if (isTeamPage(id)) return true;
+  const { data, error } = await db.from("tm_workspace_members").select("member_id")
+    .eq("workspace_id", id).eq("member_id", member).maybeSingle();
+  return !error && Boolean(data);
 }

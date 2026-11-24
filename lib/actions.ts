@@ -6,10 +6,10 @@ import { redirect } from "next/navigation";
 import { WITH_DOCK_ID, readSource, encodeSource, sourceNote, type ReviewState } from "./meeting-inbox";
 import { db } from "./supabase";
 import { getActiveWorkspaceId, ME_COOKIE, WORKSPACE_COOKIE } from "./data";
-import { boardPages } from "./board-pages";
-import { TEAM_COOKIE } from "./dock-identity";
-import { dockTeamMember } from "./dock-team";
-import { AUTH_COOKIE, authToken } from "./auth";
+
+import { TEAM_COOKIE, canOpenWorkspace } from "./dock-identity";
+import { dockTeamMember, signedInMember } from "./dock-team";
+
 import type { Category, Horizon, Priority, ProjectPhase, Status } from "./types";
 
 function refresh() {
@@ -38,53 +38,16 @@ async function checkTaskLinks(input: Partial<TaskInput>) {
 
 // ---------------------------------------------------------------- ログイン
 
-export async function signIn(_prev: string | null, form: FormData): Promise<string | null> {
-  const password = String(form.get("password") ?? "");
-  const expected = process.env.APP_PASSWORD;
-  if (!expected) return "APP_PASSWORD が .env.local に設定されていません。";
-  if (password !== expected) return "合言葉が違います。";
-  const store = await cookies();
-  const member = String(form.get("member") || "");
-  store.delete(TEAM_COOKIE);
-  const destination = boardPages.find(page => page.id === form.get("workspace"));
-  if (destination) {
-    store.set(WORKSPACE_COOKIE, destination.id, { sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 180 });
-  } else if (store.get(WORKSPACE_COOKIE)?.value === WITH_DOCK_ID) {
-    store.delete(WORKSPACE_COOKIE);
-  }
-  store.set(AUTH_COOKIE, authToken(expected), {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 180,
-  });
-  if (member) store.set(ME_COOKIE, member, { sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 180 });
-  redirect("/");
-}
-
 export async function signOut() {
   const store = await cookies();
-  const personal = store.has(TEAM_COOKIE);
-  store.delete(AUTH_COOKIE);
-  store.delete(TEAM_COOKIE);
-  store.delete(WORKSPACE_COOKIE);
-  store.delete(ME_COOKIE);
-  redirect(personal ? "/login?team=withdock" : "/login");
+  for (const key of [TEAM_COOKIE, WORKSPACE_COOKIE, ME_COOKIE, "tm_auth"]) store.delete(key);
+  redirect("/login");
 }
-
-export async function setMe(memberId: string) {
-  await getActiveWorkspaceId();
-  if ((await cookies()).has(TEAM_COOKIE)) return;
-  const store = await cookies();
-  store.set(ME_COOKIE, memberId, { sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 180 });
-  refresh();
-}
-
-// ---------------------------------------------------------------- ページ
 
 export async function setWorkspace(workspaceId: string): Promise<{ error?: string }> {
   await getActiveWorkspaceId();
-  if ((await cookies()).has(TEAM_COOKIE)) return { error: "個人ログインではウィズドックを利用できます。" };
+  const member = await signedInMember();
+  if (!member || !(await canOpenWorkspace(member, workspaceId))) return { error: "このページは開けません。" };
   const { data, error } = await db.from("tm_workspaces").select("id").eq("id", workspaceId).maybeSingle();
   if (error || !data) return { error: error?.message ?? "ページが見つかりません。" };
 
@@ -101,7 +64,8 @@ export async function setWorkspace(workspaceId: string): Promise<{ error?: strin
 
 export async function createWorkspace(name: string, memberIds: string[]): Promise<{ error?: string; id?: string }> {
   await getActiveWorkspaceId();
-  if ((await cookies()).has(TEAM_COOKIE)) return { error: "個人ログインではページを追加できません。" };
+  const member = await signedInMember();
+  if (!member || !memberIds.includes(member)) return { error: "自分を構成員に含めてください。" };
   const cleanName = name.trim();
   if (!cleanName) return { error: "ページ名を入力してください。" };
   if (cleanName.length > 40) return { error: "ページ名は40文字以内で入力してください。" };
@@ -251,7 +215,8 @@ export async function moveTaskToWorkspace(
   ownerId: string,
 ): Promise<{ error?: string }> {
   await requireRecord("tm_tasks", id);
-  if ((await cookies()).has(TEAM_COOKIE)) return { error: "このページから移動できません。" };
+  const member = await signedInMember();
+  if (!member || !(await canOpenWorkspace(member, workspaceId))) return { error: "このページには移動できません。" };
   const [{ data: workspace, error: workspaceError }, { data: membership, error: memberError }] =
     await Promise.all([
       db.from("tm_workspaces").select("id").eq("id", workspaceId).maybeSingle(),
@@ -345,7 +310,7 @@ export async function addComment(taskId: string, authorId: string, body: string)
   if (!body.trim()) return { error: "コメントが空です。" };
   const { error } = await db
     .from("tm_comments")
-    .insert({ task_id: taskId, author_id: (await dockTeamMember()) || authorId, body: body.trim() });
+    .insert({ task_id: taskId, author_id: await signedInMember(), body: body.trim() });
   if (error) return { error: error.message };
   refresh();
   return {};
@@ -359,7 +324,7 @@ export async function createInboxItem(title: string, createdBy?: string | null) 
   const { error } = await db.from("tm_inbox_items").insert({
     title: title.trim(),
     workspace_id: workspaceId,
-    created_by: (await dockTeamMember()) || createdBy || null,
+    created_by: await signedInMember(),
   });
   if (error) return { error: error.message };
   refresh();
