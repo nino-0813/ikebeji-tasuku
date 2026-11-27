@@ -2,21 +2,25 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getActiveWorkspaceId } from "@/lib/data";
 import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
-import { dockTeamMember } from "@/lib/dock-team";
+import { dockAccess } from "@/lib/dock-access";
 import { db } from "@/lib/supabase";
 import { DockGate } from "@/components/DockGate";
-import { addCustomer } from "@/lib/dock-actions";
+import { addCustomer, saveCustomerForecast, updateCustomer } from "@/lib/dock-actions";
+import { DockCustomerHistory } from "@/components/DockCustomerHistory";
+import { money } from "@/components/DockCharts";
+import { httpUrl } from "@/lib/dock-project";
 export default async function Customers({
   searchParams,
 }: PageProps<"/customers">) {
   if ((await getActiveWorkspaceId()) !== WITH_DOCK_ID) notFound();
-  if (!(await dockTeamMember())) return <DockGate />;
+  const access = await dockAccess();
+  if (!access) return <DockGate />;
   const { q, id, stage } = await searchParams;
   const [list, projects] = await Promise.all([
-    db.from("dock_customers").select("*").order("name"),
+    db.from("dock_customers").select("id,name,stage,summary,next_action,prefecture,address,email,phone,history_url").order("name"),
     db
       .from("tm_projects")
-      .select("id,title,phase,archived,dock_customer_id")
+      .select("id,title,phase,archived,dock_customer_id,client_name")
       .eq("workspace_id", WITH_DOCK_ID),
   ]);
   if (list.error || projects.error)
@@ -25,14 +29,11 @@ export default async function Customers({
     (c) => (!q || c.name.includes(String(q))) && (!stage || c.stage === stage),
   );
   const selected = id ? visible.find((c) => c.id === id) : visible[0];
-  const history = selected
-    ? await db
-        .from("dock_history")
-        .select("*")
-        .eq("customer_id", selected.id)
-        .order("created_at", { ascending: false })
-    : null;
-  if (history?.error) throw new Error("顧客履歴を取得できませんでした。");
+  const forecast = selected && access.view_finance && selected.stage !== "active"
+    ? await db.from("dock_customers").select("forecast_amount,forecast_month,forecast_confidence").eq("id", selected.id).single() : null;
+  if (forecast?.error) throw new Error("商談予測を取得できませんでした。");
+  const sales = projects.data.filter(p => p.phase === "sales" && !p.archived && !p.dock_customer_id);
+  const unlinked = projects.data.filter(p => p.phase !== "sales" && !p.archived && !p.dock_customer_id);
   return (
     <div className="wd-stack">
       <h1 className="text-xl font-bold">顧客理解</h1>
@@ -42,6 +43,7 @@ export default async function Customers({
             "": "すべての顧客",
             lead: "リスト段階",
             negotiation: "商談中",
+            active: "取引中",
           }).map(([key, label]) => (
             <Link
               href={"/customers?stage=" + key}
@@ -53,7 +55,7 @@ export default async function Customers({
           ))}
         </nav>
         <div className="flex gap-2 items-start">
-          <details className="wd-edit">
+          {access.edit_operations && <details className="wd-edit">
             <summary>顧客を登録</summary>
             <form action={addCustomer} className="space-y-2">
               <label className="label">
@@ -78,14 +80,12 @@ export default async function Customers({
               </label>
               <button className="text-brand">登録する</button>
             </form>
-          </details>
+          </details>}
           {selected && (
             <a
               className="wd-primary"
               href={
-                selected.history_url?.startsWith("https://")
-                  ? selected.history_url
-                  : "#history"
+                httpUrl(selected.history_url) || "#history"
               }
             >
               顧客履歴を参照 ↗
@@ -182,25 +182,46 @@ export default async function Customers({
                     ))}
                 </span>
               </div>
-              {selected.history_url?.startsWith("https://") && (
-                <a className="wd-row" href={selected.history_url}>
-                  顧客履歴ドキュメントを開く ↗
-                </a>
+              {access.edit_operations && (
+                <details className="mt-4">
+                  <summary>顧客情報を更新・履歴を追加</summary>
+                  <form action={updateCustomer} className="mt-2 grid gap-2">
+                    <input type="hidden" name="customer" value={selected.id} />
+                    <input type="hidden" name="request" value={crypto.randomUUID()} />
+                    <label>状況<select className="field" name="stage" defaultValue={selected.stage}>
+                      <option value="lead">リスト段階</option><option value="negotiation">商談中</option><option value="active">取引中</option>
+                    </select></label>
+                    <label>事業背景<textarea className="field" name="summary" defaultValue={selected.summary} /></label>
+                    <label>次のアクション<input className="field" name="next_action" defaultValue={selected.next_action} /></label>
+                    <label>顧客履歴のDrive URL<input className="field" type="url" name="history_url" defaultValue={selected.history_url || ""} /></label>
+                    <label>履歴の種類<select className="field" name="source_kind"><option value="manual">手動更新</option><option value="meeting">会議</option></select></label>
+                    <label>履歴メモ<textarea className="field" name="note" /></label>
+                    <label>履歴の原文URL<input className="field" type="url" name="source_url" /></label>
+                    <button className="wd-primary">顧客情報を保存</button>
+                  </form>
+                </details>
               )}
-              <h3 id="history" className="wd-title mt-4">
-                最近の情報更新
-              </h3>
-              {history?.data?.map((h) => (
-                <p className="wd-row" key={h.id}>
-                  {h.created_at.slice(0, 10)}　{h.body}{" "}
-                  {h.source_url?.startsWith("https://") && (
-                    <a href={h.source_url}>原文 ↗</a>
+              {forecast?.data && (
+                <section className="mt-4">
+                  <h3 className="wd-title">商談予測</h3>
+                  <p>{forecast.data.forecast_month?.slice(0, 7)}　{money(forecast.data.forecast_amount)}</p>
+                  {access.edit_finance && (
+                    <details className="mt-2">
+                      <summary>商談予測を編集</summary>
+                      <form action={saveCustomerForecast} className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <input type="hidden" name="customer" value={selected.id} />
+                        <label>見込月<input type="month" className="field" name="month" defaultValue={forecast.data.forecast_month?.slice(0, 7) || ""} /></label>
+                        <label>金額（空欄で予測を解除）<input type="number" min="1" className="field" name="amount" defaultValue={forecast.data.forecast_amount ?? ""} /></label>
+                        <label>確度<select className="field" name="confidence" defaultValue={forecast.data.forecast_confidence || "medium"}>
+                          <option value="low">低</option><option value="medium">中</option><option value="high">高</option>
+                        </select></label>
+                        <button className="wd-primary">商談予測を保存</button>
+                      </form>
+                    </details>
                   )}
-                </p>
-              ))}
-              {!history?.data?.length && (
-                <p className="wd-empty">履歴はまだありません。</p>
+                </section>
               )}
+              <DockCustomerHistory customer={selected.id} />
             </>
           ) : (
             <>
@@ -212,6 +233,18 @@ export default async function Customers({
           )}
         </article>
       </div>
+      {unlinked.length > 0 && (
+        <section className="wd-panel">
+          <h2 className="wd-title">顧客未紐づけの案件 <Link href="/projects?filter=unlinked">{unlinked.length}件 →</Link></h2>
+          <p className="text-sm">案件詳細から既存顧客を選んで紐づけられます。</p>
+        </section>
+      )}
+      {sales.length > 0 && (
+        <section className="wd-panel">
+          <h2 className="wd-title">顧客との紐づけが必要な商談</h2>
+          {sales.map(p => <Link className="wd-row" key={p.id} href={"/projects/" + p.id}>{p.title} →</Link>)}
+        </section>
+      )}
     </div>
   );
 }

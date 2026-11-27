@@ -16,10 +16,11 @@ const pages = [
 ];
 export function DockShell({
   children,
-  user, workspaces,
+  user, workspaces, canViewFinance,
 }: {
   children: ReactNode;
   user: string;
+  canViewFinance: boolean;
   workspaces: { id: string; name: string }[];
 }) {
   const router = useRouter();
@@ -41,7 +42,7 @@ export function DockShell({
           : "作業一覧";
   return (
     <div className="wd-shell">
-      <aside className={"wd-side " + (menu ? "opened" : "")}>
+      <aside id="workspace-navigation" className={"wd-side " + (menu ? "opened" : "")}>
         <Link href="/" className="wd-logo">
           with<span>dock</span>
           <small>OPERATIONS</small>
@@ -61,7 +62,7 @@ export function DockShell({
           </div>
         </details>
         <nav aria-label="ワークスペース">
-          {pages.map(([url, label]) => (
+          {pages.filter(([url]) => url !== "/cash" || canViewFinance).map(([url, label]) => (
             <Link
               key={url}
               href={url}
@@ -73,13 +74,13 @@ export function DockShell({
             </Link>
           ))}
         </nav>
-        <Link className="wd-sync" href="/settings">
-          ● 共有中　　 ○ 同期状況
+        <Link className="wd-sync" href="/settings#drive-sync">
+          Drive同期状況
         </Link>
       </aside>
       <div className="wd-main">
         <header className="wd-top">
-          <button onClick={() => setMenu(!menu)} aria-expanded={menu}>
+          <button onClick={() => setMenu(open => !open)} aria-expanded={menu} aria-controls="workspace-navigation">
             ☰ メニュー
           </button>
           <Link href="/">WORKSPACE / with dock</Link>
@@ -90,7 +91,6 @@ export function DockShell({
           </div>
         </header>
         <main id="main-content" className="wd-body">
-          <small>with dock / {title}</small>
           <h1>{title}</h1>
           {children}
         </main>

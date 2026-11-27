@@ -11,7 +11,9 @@ function words(text: string) {
     .map(part => part.segment).filter(word => word.length >= 2 && !/^(する|いる|ため|について|対応|作成|担当|案件|行う|確認|整理)$/.test(word)));
 }
 
-function suggest(title: string, quote: string, projects: Project[]) {
+type ProjectMatch = Pick<Project, "id" | "title" | "client_name" | "category" | "goal_id">;
+
+function suggest(title: string, quote: string, projects: ProjectMatch[]) {
   const scores = projects.map(project => {
     const labels = [project.title.split(/[（(]/)[0], project.client_name || ""]
       .map(normalize).filter(label => label.length >= 2);
@@ -44,9 +46,9 @@ function similar(a: string, b: string) {
   return shared >= 4 && shared / new Set([...left, ...right]).size >= 0.72;
 }
 
-export function reviewGroups(items: InboxItem[], projects: Project[]) {
+export function reviewGroups(items: InboxItem[], projects: ProjectMatch[]) {
   type Entry = {item: InboxItem; candidate: NonNullable<ReturnType<typeof readSource>>};
-  const groups: {entries: Entry[]; project: Project | null}[] = [];
+  const groups: {entries: Entry[]; project: ProjectMatch | null}[] = [];
   for (const item of items) {
     const candidate = readSource(item.detail);
     if (!candidate) continue;

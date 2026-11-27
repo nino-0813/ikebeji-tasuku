@@ -64,6 +64,13 @@ export type Goal = {
 
 export type Project = {
   dock_customer_id?: string | null;
+  dock_owner_ids?: string[];
+  dock_finish_on?: string | null;
+  dock_preview_url?: string | null;
+  dock_deployment_url?: string | null;
+  dock_archived_on?: string | null;
+  dock_archive_reason?: string | null;
+  dock_archive_support?: "continue" | "end" | "none" | null;
   id: string;
   workspace_id: string;
   title: string;

@@ -2,66 +2,44 @@ import { money, MonthBars } from "./DockCharts";
 import Link from "next/link";
 import { db } from "@/lib/supabase";
 import { getTasks, getProjects } from "@/lib/data";
-import { dockTeamMember } from "@/lib/dock-team";
+import { dockAccess } from "@/lib/dock-access";
+import { dockToday } from "@/lib/dock-project";
+import { dockFinance } from "@/lib/dock-finance-data";
+import { cashOutlook } from "@/lib/dock-cash";
 import { DockGate } from "./DockGate";
 export async function DockHome() {
-  const member = await dockTeamMember();
-  if (!member) return <DockGate />;
-  const today = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Asia/Tokyo",
-  }).format(new Date());
-  const start = today.slice(0, 7) + "-01";
-  const end = new Date(
-    Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 1),
-  )
-    .toISOString()
-    .slice(0, 10);
-  const [tasks, projects, pending, paid, targets, unpaid] = await Promise.all([
-    getTasks(),
-    getProjects(),
-    db
-      .from("dock_proposals")
-      .select("kind", { count: "exact" })
-      .eq("state", "pending"),
-    db
-      .from("dock_payments")
-      .select("received_amount")
-      .gte("received_on", start)
-      .lt("received_on", end),
-    db.from("dock_monthly_targets").select("amount").eq("month", start),
-    db
-      .from("dock_payments")
-      .select("amount")
-      .is("received_on", null)
-      .gte("due_on", start)
-      .lt("due_on", end),
+  const access = await dockAccess();
+  if (!access) return <DockGate />;
+  const today = dockToday();
+  const month = today.slice(0, 7);
+  const [tasks, projects, pending, finance, steps, sync] = await Promise.all([
+    getTasks(), getProjects(),
+    db.from("dock_proposals").select("kind", { count: "exact" }).eq("state", "pending"),
+    access.view_finance ? dockFinance(month) : null,
+    db.from("dock_steps").select("project_id"),
+    db.from("dock_sync_runs").select("succeeded").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
-  if (pending.error || paid.error || unpaid.error || targets.error)
-    throw new Error("ホームを取得できませんでした。");
+  if (pending.error || steps.error || sync.error) throw new Error("ホームを取得できませんでした。");
+  const active = projects.filter(p => p.phase !== "sales");
+  const unlinked = active.filter(p => !p.dock_customer_id);
+  const noSteps = active.filter(p => !steps.data.some(s => s.project_id === p.id));
+  const totals = finance ? cashOutlook(month, finance.targets, finance.payments, finance.sales)[0] : null;
   const due = tasks
     .filter(
       (t) =>
-        t.status !== "done" && t.owner_id === member && t.due_date <= today,
+        t.status !== "done" && t.owner_id === access.member && t.due_date <= today,
     )
     .sort((a, b) => a.due_date.localeCompare(b.due_date));
-  const receipts = paid.data.reduce((n, p) => n + Number(p.received_amount), 0),
-    target = targets.data.reduce((n, p) => n + Number(p.amount), 0);
-  const forecast =
-    receipts + unpaid.data.reduce((sum, p) => sum + Number(p.amount), 0);
   return (
     <div className="wd-stack">
       <div className="wd-four">
         {[
           ["承認待ちの提案", (pending.count || 0) + "件", "/inbox"],
           ["期限を迎えた担当作業", due.length + "件", "#due"],
-          ["今月の実入金", money(receipts), "/cash"],
-          [
-            "目標まで",
-            targets.data.length
-              ? money(Math.max(0, target - receipts))
-              : "目標未設定",
-            "/cash",
-          ],
+          ...(totals ? [
+            ["今月の実入金", money(totals.received), "/cash"],
+            ["目標まで", totals.target === null ? "目標未設定" : money(Math.max(0, totals.target - totals.received)), "/cash"],
+          ] : []),
         ].map(([label, value, url]) => (
           <Link href={url} key={label} className="wd-panel wd-stat">
             <p className="text-sm">{label}</p>
@@ -123,30 +101,37 @@ export async function DockHome() {
               <span>期限を過ぎた作業があります →</span>
             </Link>
           )}
+          {unlinked.length > 0 && (
+            <Link className="wd-row wd-signal amber" href="/projects?filter=unlinked">
+              <b>顧客未紐づけ</b><span>{unlinked.length}件 →</span>
+            </Link>
+          )}
+          {noSteps.length > 0 && (
+            <Link className="wd-row wd-signal amber" href="/projects?filter=no-steps">
+              <b>工程未登録</b><span>{noSteps.length}件 →</span>
+            </Link>
+          )}
+          {sync.data?.succeeded === false && (
+            <Link className="wd-row wd-signal rose" href="/settings#drive-sync">
+              <b>Drive同期に失敗</b><span>実行履歴を見る →</span>
+            </Link>
+          )}
         </section>
-        <section className="wd-panel">
-          <h2 className="wd-title">
-            今月の入金状況<Link href="/cash">目標・入金 →</Link>
-          </h2>
-          <MonthBars
-            row={{
-              month: start,
-              target: targets.data.length ? target : null,
-              received: receipts,
-              forecast,
-              confirmed: 0,
-              estimated: 0,
-            }}
-          />
-        </section>
+        {totals && (
+          <section className="wd-panel">
+            <h2 className="wd-title">
+              今月の入金状況<Link href="/cash">目標・入金 →</Link>
+            </h2>
+            <MonthBars row={totals} />
+          </section>
+        )}
       </div>
       <section className="wd-panel">
         <h2 className="wd-title">
           進行中の案件<Link href="/projects">プロジェクトを見る →</Link>
         </h2>
         <div className="wd-three">
-          {projects
-            .filter((p) => p.phase !== "sales")
+          {active
             .slice(0, 6)
             .map((p) => (
               <Link key={p.id} href={"/projects/" + p.id} className="wd-note">
@@ -157,7 +142,7 @@ export async function DockHome() {
               </Link>
             ))}
         </div>
-        {!projects.some((p) => p.phase !== "sales") && (
+        {!active.length && (
           <p className="wd-empty">進行中の案件はありません。</p>
         )}
       </section>

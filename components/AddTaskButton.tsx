@@ -13,7 +13,8 @@ export function AddTaskButton({
   title?: string;
   variant?: "ghost" | "solid";
 }) {
-  const { openNew } = useTaskUI();
+  const { openNew, canEdit } = useTaskUI();
+  if (!canEdit) return null;
   const cls =
     variant === "solid"
       ? "rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:brightness-110"

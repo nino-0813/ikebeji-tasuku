@@ -1,6 +1,7 @@
+import { dockMemberDisplay } from "@/lib/dock-members";
 import "./dock.css";
 import { DockShell } from "@/components/DockShell";
-import { dockTeamMember } from "@/lib/dock-team";
+import { dockAccess } from "@/lib/dock-access";
 import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
 import { DockGate } from "@/components/DockGate";
 import {
@@ -22,7 +23,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   if (!isConfigured()) return <SetupNotice />;
 
   const personal = (await getActiveWorkspaceId()) === WITH_DOCK_ID;
-  if (personal && !(await dockTeamMember()))
+  const access = personal ? await dockAccess() : null;
+  if (personal && !access)
     return (
       <main className="mx-auto max-w-lg p-5">
         <DockGate />
@@ -52,13 +54,14 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     <TaskUIProvider
       members={members}
       goals={goals}
-      projects={projects}
-      me={me}
+      projects={projects.map(({ id, title, category, goal_id, client_name }) => ({ id, title, category, goal_id, client_name }))}
+      me={personal && me ? dockMemberDisplay(me) : me}
+      canEdit={!personal || !!access?.edit_operations}
       workspaces={workspaces}
       currentWorkspace={currentWorkspace}
     >
       {personal ? (
-        <DockShell workspaces={workspaces.map(({id,name}) => ({id,name}))} user={me?.name || "メンバー"}>{children}</DockShell>
+        <DockShell canViewFinance={!!access?.view_finance} workspaces={workspaces.map(({id,name}) => ({id,name}))} user={me ? dockMemberDisplay(me).name : "メンバー"}>{children}</DockShell>
       ) : (
         <div className="app-shell">
           <Nav

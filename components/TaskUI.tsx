@@ -2,11 +2,13 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { Comment, Goal, Member, Project, Subtask, Task, TaskAttachment, Workspace } from "@/lib/types";
 import { CATEGORIES, PRIORITIES, STATUSES } from "@/lib/types";
 import { addDaysISO, formatDateLong, todayISO } from "@/lib/format";
 import { addComment, addSubtask, createProject, createTask, promoteMeetingItem, deleteInboxItem, deleteSubtask, deleteTask, moveTaskToWorkspace, toggleSubtask, updateTask } from "@/lib/actions";
 import { Avatar } from "./ui";
+import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
 
 function MeetingReference({text}:{text:string}) {
   const url = text.match(/^https:\/\/withdock-workspace\.vercel\.app\/#meetings\/[\w-]+$/m)?.[0];
@@ -28,12 +30,15 @@ export type NewTaskDefaults = {
   related_candidates?: string[];
 };
 
+type TaskProject = Pick<Project, "id" | "title" | "goal_id" | "category" | "client_name">;
+
 type Ctx = {
+  canEdit: boolean;
   openNew: (defaults?: NewTaskDefaults) => void;
   openTask: (task: Task) => void;
   members: Member[];
   goals: Goal[];
-  projects: Project[];
+  projects: TaskProject[];
   me: Member | null;
   workspaces: Workspace[];
   currentWorkspace: Workspace | null;
@@ -54,27 +59,31 @@ export function TaskUIProvider({
   me,
   workspaces,
   currentWorkspace,
+  canEdit = true,
   children,
 }: {
   members: Member[];
   goals: Goal[];
-  projects: Project[];
+  projects: TaskProject[];
   me: Member | null;
   workspaces: Workspace[];
   currentWorkspace: Workspace | null;
+  canEdit?: boolean;
   children: React.ReactNode;
 }) {
   const [editing, setEditing] = useState<Task | null>(null);
   const [creating, setCreating] = useState<NewTaskDefaults | null>(null);
 
   const openNew = useCallback((defaults?: NewTaskDefaults) => {
+    if (!canEdit) return;
     setEditing(null);
     setCreating(defaults ?? {});
-  }, []);
+  }, [canEdit]);
   const openTask = useCallback((task: Task) => {
+    if (!canEdit) return;
     setCreating(null);
     setEditing(task);
-  }, []);
+  }, [canEdit]);
   const close = useCallback(() => {
     setEditing(null);
     setCreating(null);
@@ -82,6 +91,7 @@ export function TaskUIProvider({
 
   // どこにいても「n」で新規タスク
   useEffect(() => {
+    if (!canEdit) return;
     function onKey(e: KeyboardEvent) {
       const el = e.target as HTMLElement | null;
       const typing =
@@ -94,17 +104,17 @@ export function TaskUIProvider({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [openNew]);
+  }, [canEdit, openNew]);
 
   const value = useMemo(
-    () => ({ openNew, openTask, members, goals, projects, me, workspaces, currentWorkspace }),
-    [openNew, openTask, members, goals, projects, me, workspaces, currentWorkspace],
+    () => ({ canEdit, openNew, openTask, members, goals, projects, me, workspaces, currentWorkspace }),
+    [canEdit, openNew, openTask, members, goals, projects, me, workspaces, currentWorkspace],
   );
 
   return (
     <TaskUIContext.Provider value={value}>
       {children}
-      {(editing || creating) && (
+      {canEdit && (editing || creating) && (
         <TaskDialog
           key={editing?.id ?? "new"}
           task={editing}
@@ -139,7 +149,7 @@ function TaskDialog({
   defaults?: NewTaskDefaults;
   members: Member[];
   goals: Goal[];
-  projects: Project[];
+  projects: TaskProject[];
   me: Member | null;
   workspaces: Workspace[];
   currentWorkspace: Workspace | null;
@@ -208,7 +218,7 @@ function TaskDialog({
 
   const missing: string[] = [];
   if (!title.trim()) missing.push("タスク名");
-  const dock = currentWorkspace?.id === "00000000-0000-4000-8000-000000000005";
+  const dock = currentWorkspace?.id === WITH_DOCK_ID;
   const fromMeeting = isNew && Boolean(defaults?.candidate_id);
   if (fromMeeting && !projectId) missing.push("プロジェクト");
   if (!ownerId) missing.push("担当者");
@@ -383,7 +393,8 @@ function TaskDialog({
                 ))}
                 {createdProject && !projects.some(p=>p.id===createdProject.id) && <option value={createdProject.id}>{createdProject.title}</option>}
               </select>
-              {fromMeeting && (addingProject ? <div className="mt-2 space-y-2 rounded-lg border border-line p-3">
+              {fromMeeting && dock && <Link className="mt-2 inline-block text-sm font-bold text-brand" href="/projects/new" target="_blank">＋ 新規案件登録を開く ↗</Link>}
+              {fromMeeting && !dock && (addingProject ? <div className="mt-2 space-y-2 rounded-lg border border-line p-3">
                 <label className="label" htmlFor="new-project-title">新規プロジェクト名</label>
                 <input id="new-project-title" autoFocus className="field" value={projectName} onChange={e=>setProjectName(e.target.value)}/>
                 <div className="flex gap-4 text-sm"><button disabled={creatingProject || !projectName.trim()} className="font-bold text-brand disabled:opacity-40" onClick={addProject}>作成して選択</button>
@@ -412,6 +423,7 @@ function TaskDialog({
                     <button
                       key={m.id}
                       type="button"
+                      aria-pressed={on}
                       onClick={() => setOwnerId(m.id)}
                       className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${
                         on
@@ -449,6 +461,8 @@ function TaskDialog({
               </label>
               <input
                 type="date"
+                aria-label="期限"
+                required
                 className="field tnum"
                 value={dueDate}
                 min={startDate || undefined}
@@ -492,7 +506,7 @@ function TaskDialog({
             </div>
           </div>
 
-          {status === "waiting" && (
+          {!dock && status === "waiting" && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
               <label className="label text-amber-800">何を待っている？（誰の・何の返事か）</label>
               <input
@@ -507,7 +521,7 @@ function TaskDialog({
             </div>
           )}
 
-          {goals.length > 0 && (
+          {!dock && goals.length > 0 && (
             <div>
               <label className="label">紐づく目標（任意）</label>
               <select className="field" value={goalId} onChange={(e) => setGoalId(e.target.value)}>

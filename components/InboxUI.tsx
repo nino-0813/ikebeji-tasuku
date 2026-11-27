@@ -65,7 +65,7 @@ export function InboxUI({ items, me, tasks }: { items: InboxItem[]; me: Member |
   );
 }
 
-function MeetingCandidate({item,tasks,project,siblings=[]}:{item:InboxItem;tasks:TaskOption[];project:Project|null;siblings?:InboxItem[]}) {
+function MeetingCandidate({item,tasks,project,siblings=[]}:{item:InboxItem;tasks:TaskOption[];project:Pick<Project, "id" | "title" | "category" | "goal_id">|null;siblings?:InboxItem[]}) {
   const candidate = readSource(item.detail)!;
   const {source,state} = candidate;
   const [choosing,setChoosing] = useState(state === "linking");

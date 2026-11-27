@@ -91,7 +91,6 @@ do $$ begin
   alter table tm_projects add constraint tm_projects_phase_check
     check (phase in ('sales','production','maintenance'));
 exception when duplicate_object then null; end $$;
-create index if not exists tm_projects_phase_idx on tm_projects(workspace_id, phase, sort_order);
 
 -- Web制作案件の顧客・収支情報
 alter table tm_projects add column if not exists client_name text;
@@ -208,6 +207,7 @@ alter table tm_inbox_items alter column workspace_id set default '00000000-0000-
 
 create index if not exists tm_goals_workspace_idx    on tm_goals(workspace_id);
 create index if not exists tm_projects_workspace_idx on tm_projects(workspace_id);
+create index if not exists tm_projects_phase_idx on tm_projects(workspace_id, phase, sort_order);
 create index if not exists tm_meetings_workspace_idx on tm_meetings(workspace_id);
 create index if not exists tm_tasks_workspace_idx    on tm_tasks(workspace_id);
 create index if not exists tm_inbox_workspace_idx    on tm_inbox_items(workspace_id);

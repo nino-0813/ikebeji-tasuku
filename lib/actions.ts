@@ -10,6 +10,8 @@ import { getActiveWorkspaceId, ME_COOKIE, WORKSPACE_COOKIE } from "./data";
 import { TEAM_COOKIE, canOpenWorkspace } from "./dock-identity";
 import { dockTeamMember, signedInMember } from "./dock-team";
 import { TEAM_REFRESH_COOKIE } from "./dock-session";
+import { dockAccess, requireDock } from "./dock-access";
+import { isDockDate } from "./dock-project";
 
 import type { Category, Horizon, Priority, ProjectPhase, Status } from "./types";
 
@@ -19,6 +21,7 @@ function refresh() {
 
 async function requireRecord(table: string, id: string) {
   const workspace = await getActiveWorkspaceId();
+  if (workspace === WITH_DOCK_ID) await requireDock("edit_operations");
   const { data } = await db.from(table).select("id").eq("id", id).eq("workspace_id", workspace).maybeSingle();
   if (!data) throw new Error("このページの対象を選択してください。");
 }
@@ -125,7 +128,7 @@ export type TaskInput = {
 function validate(input: TaskInput): string | null {
   if (!input.title.trim()) return "タスク名を入れてください。";
   if (!input.owner_id) return "担当者（ボールを持つ人）を選んでください。";
-  if (!input.due_date) return "期限を入れてください。";
+  if (!isDockDate(input.due_date)) return "期限を入れてください。";
   if (input.start_date && input.start_date > input.due_date) return "開始日は期限以前にしてください。";
   return null;
 }
@@ -140,6 +143,12 @@ async function insertTask(input: TaskInput, candidateId?: string): Promise<{ err
   if (error) return { error };
 
   const workspaceId = await getActiveWorkspaceId();
+  if (workspaceId === WITH_DOCK_ID) {
+    await requireDock("edit_operations");
+    const { data } = await db.from("tm_workspace_members").select("member_id")
+      .eq("workspace_id", workspaceId).eq("member_id", input.owner_id).maybeSingle();
+    if (!data) return { error: "with dockの担当者を選んでください。" };
+  }
   // 新規は各列の先頭に積む
   const { data: top } = await db
     .from("tm_tasks")
@@ -187,9 +196,14 @@ export async function updateTask(
 ): Promise<{ error?: string }> {
   await checkTaskLinks(patch);
   await requireRecord("tm_tasks", id);
+  if (patch.owner_id && (await getActiveWorkspaceId()) === WITH_DOCK_ID) {
+    const { data } = await db.from("tm_workspace_members").select("member_id")
+      .eq("workspace_id", WITH_DOCK_ID).eq("member_id", patch.owner_id).maybeSingle();
+    if (!data) return { error: "with dockの担当者を選んでください。" };
+  }
   if (patch.title !== undefined && !patch.title.trim()) return { error: "タスク名は空にできません。" };
   if (patch.owner_id !== undefined && !patch.owner_id) return { error: "担当者は空にできません。" };
-  if (patch.due_date !== undefined && !patch.due_date) return { error: "期限は空にできません。" };
+  if (patch.due_date !== undefined && !isDockDate(patch.due_date)) return { error: "期限は空にできません。" };
   if (patch.start_date && patch.due_date && patch.start_date > patch.due_date)
     return { error: "開始日は期限以前にしてください。" };
 
@@ -220,6 +234,10 @@ export async function moveTaskToWorkspace(
   await requireRecord("tm_tasks", id);
   const member = await signedInMember();
   if (!member || !(await canOpenWorkspace(member, workspaceId))) return { error: "このページには移動できません。" };
+  if (workspaceId === WITH_DOCK_ID && (await getActiveWorkspaceId()) !== WITH_DOCK_ID) {
+    const { data, error } = await db.from("dock_permissions").select("edit_operations").eq("member_id", member).maybeSingle();
+    if (error || data?.edit_operations === false) return { error: "移動先のタスクを編集する権限がありません。" };
+  }
   const [{ data: workspace, error: workspaceError }, { data: membership, error: memberError }] =
     await Promise.all([
       db.from("tm_workspaces").select("id").eq("id", workspaceId).maybeSingle(),
@@ -324,6 +342,7 @@ export async function addComment(taskId: string, authorId: string, body: string)
 export async function createInboxItem(title: string, createdBy?: string | null) {
   if (!title.trim()) return { error: "メモを入力してください。" };
   const workspaceId = await getActiveWorkspaceId();
+  if (workspaceId === WITH_DOCK_ID) await requireDock("edit_operations");
   const { error } = await db.from("tm_inbox_items").insert({
     title: title.trim(),
     workspace_id: workspaceId,
@@ -335,7 +354,7 @@ export async function createInboxItem(title: string, createdBy?: string | null) 
 }
 
 async function meetingItem(id: string) {
-  if (!await dockTeamMember()) return null;
+  if (!(await dockAccess())?.approve_proposals) return null;
   const { data, error } = await db.from("tm_inbox_items").select("id,detail").eq("id",id).eq("workspace_id",WITH_DOCK_ID).maybeSingle();
   if (error) throw error;
   const parsed = readSource(data?.detail);
@@ -364,6 +383,8 @@ export async function promoteMeetingItem(id: string, input: TaskInput, related: 
   const invalid = validate(input);
   if (invalid) return {error:invalid};
   if (!input.project_id || await getActiveWorkspaceId() !== WITH_DOCK_ID) return {error:"登録先のプロジェクトを選択してください。"};
+  await requireDock("edit_operations");
+  await requireDock("approve_proposals");
   const {data: project,error: projectError} = await db.from("tm_projects").select("id")
     .eq("id",input.project_id).eq("workspace_id",WITH_DOCK_ID).eq("archived",false).maybeSingle();
   if (projectError || !project) return {error:"登録先のプロジェクトを確認して、もう一度選んでください。"};
@@ -404,6 +425,7 @@ export async function deleteInboxItem(id: string) {
     const item = await meetingItem(id);
     if (!item || item.state !== "pending" || !await transition(item,"closed")) return {error:reviewed};
   } else {
+    if (workspace === WITH_DOCK_ID) await requireDock("edit_operations");
     const { error } = await db.from("tm_inbox_items").delete().eq("id",id).eq("workspace_id",workspace);
     if (error) return { error: error.message };
   }
@@ -452,6 +474,7 @@ export async function deleteSubtask(id: string) {
 
 export async function createMeeting(title: string, heldOn: string) {
   const workspaceId = await getActiveWorkspaceId();
+  if (workspaceId === WITH_DOCK_ID) await requireDock("edit_operations");
   const { data, error } = await db
     .from("tm_meetings")
     .insert({ title: title.trim() || "打ち合わせ", held_on: heldOn, workspace_id: workspaceId })
@@ -504,6 +527,7 @@ export async function createProject(input: ProjectInput): Promise<{ error?: stri
   if (!input.title.trim()) return { error: "プロジェクト名を入れてください。" };
 
   const workspaceId = await getActiveWorkspaceId();
+  if (workspaceId === WITH_DOCK_ID) return { error: "新規案件登録から顧客を紐づけてください。" };
   // 新規は一覧の先頭に積む
   const { data: top } = await db
     .from("tm_projects")
@@ -539,6 +563,7 @@ export async function updateProject(
 ): Promise<{ error?: string }> {
   if (patch.goal_id) await requireRecord("tm_goals", patch.goal_id);
   await requireRecord("tm_projects", id);
+  if ((await getActiveWorkspaceId()) === WITH_DOCK_ID) return { error: "案件詳細から案件情報を編集してください。" };
   if (patch.title !== undefined && !patch.title.trim())
     return { error: "プロジェクト名は空にできません。" };
 
@@ -567,6 +592,7 @@ export async function updateProject(
  */
 export async function deleteProject(id: string): Promise<{ error?: string }> {
   await requireRecord("tm_projects", id);
+  if ((await getActiveWorkspaceId()) === WITH_DOCK_ID) return { error: "案件詳細からアーカイブしてください。" };
   const { error } = await db.from("tm_projects").delete().eq("id", id);
   if (error) return { error: error.message };
   refresh();
@@ -603,6 +629,7 @@ export async function createGoal(input: GoalInput) {
   if (!input.title.trim()) return { error: "目標名を入れてください。" };
   if (!input.deadline) return { error: "期限を入れてください。" };
   const workspaceId = await getActiveWorkspaceId();
+  if (workspaceId === WITH_DOCK_ID) await requireDock("edit_operations");
   const { error } = await db.from("tm_goals").insert({
     ...input,
     workspace_id: workspaceId,

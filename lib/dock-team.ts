@@ -9,7 +9,7 @@ export const signedInMember = cache(async () =>
 );
 
 export const dockTeamMember = cache(async () => {
-  const selected = (await cookies()).get("tm_workspace")?.value;
+  const selected = (await cookies()).get("tm_workspace")?.value || WITH_DOCK_ID;
   if (selected !== WITH_DOCK_ID) return null;
   return signedInMember();
 });

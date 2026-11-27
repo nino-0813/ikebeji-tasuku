@@ -1,12 +1,15 @@
 import { getWorkspaceMembers } from "@/lib/data";
 import Link from "next/link";
-import { dockTeamMember } from "@/lib/dock-team";
+import { dockAccess } from "@/lib/dock-access";
+import { PREFECTURES } from "@/lib/dock-project";
 import { db } from "@/lib/supabase";
 import { registerProject } from "@/lib/dock-actions";
 import { DockGate } from "@/components/DockGate";
 export const dynamic = "force-dynamic";
 export default async function NewProject() {
-  if (!(await dockTeamMember())) return <DockGate />;
+  const access = await dockAccess();
+  if (!access) return <DockGate />;
+  if (!access.edit_operations) return <p className="wd-panel">案件を登録する権限はありません。</p>;
   const { data, error } = await db
     .from("dock_customers")
     .select("id,name")
@@ -17,6 +20,7 @@ export default async function NewProject() {
     <div className="wd-split">
       <form action={registerProject} className="wd-panel">
         <h2 className="wd-title">新規案件を作成</h2>
+        <input type="hidden" name="request" value={crypto.randomUUID()} />
         <div className="grid gap-4 sm:grid-cols-2">
           <label>
             顧客
@@ -58,15 +62,20 @@ export default async function NewProject() {
           </label>
         </div>
         <details open className="my-4 wd-supplement">
-          <summary>会社・契約用の補足情報</summary>
+          <summary>制作リンク・顧客情報の補足</summary>
+          <p className="my-2 text-sm">住所と連絡先は顧客情報の空欄を補足します。</p>
           <div className="grid gap-3 sm:grid-cols-2">
+            <label>都道府県<select name="prefecture" className="field" defaultValue="">
+              <option value="">未選択</option>
+              {PREFECTURES.map(name => <option key={name}>{name}</option>)}
+            </select></label>
             {[
-              ["prefecture", "都道府県", "text"],
               ["address", "市区町村・住所", "text"],
               ["email", "メールアドレス", "email"],
               ["phone", "電話番号", "tel"],
               ["website", "公開サイト", "url"],
-              ["preview", "プレビューURL", "url"],
+              ["preview", "確認用URL", "url"],
+              ["deployment", "最新版Vercel URL", "url"],
             ].map(([name, label, type]) => (
               <label key={name}>
                 {label}

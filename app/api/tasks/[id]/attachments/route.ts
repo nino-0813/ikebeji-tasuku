@@ -1,3 +1,6 @@
+import { dockAccess } from "@/lib/dock-access";
+import { getActiveWorkspaceId } from "@/lib/data";
+import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 
@@ -19,6 +22,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
+  if ((await getActiveWorkspaceId()) === WITH_DOCK_ID && !(await dockAccess())?.edit_operations) {
+    return NextResponse.json({ error: "添付ファイルを編集する権限がありません。" }, { status: 403 });
+  }
   const form = await request.formData();
   const value = form.get("file");
   if (!(value instanceof File)) {

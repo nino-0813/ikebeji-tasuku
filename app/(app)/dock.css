@@ -523,3 +523,36 @@
 .wd-switch > div { position: absolute; z-index: 5; width: 100%; padding: 4px; background: white; color: #203839; border: 1px solid #c3d5cf; border-radius: 8px; box-shadow: 0 4px 12px #20383924; }
 .wd-switch a, .wd-switch span { display: block; padding: 8px; border-radius: 4px; }
 .wd-switch a:hover, .wd-switch span { background: #edf5f1; }
+
+.wd-shell :is(a, button, summary, input, select, textarea):focus-visible {
+  outline: 2px solid #26715f;
+  outline-offset: 3px;
+}
+.wd-panel :is(p, dd, a, strong, small) {
+  overflow-wrap: anywhere;
+}
+.wd-stats-bar {
+  grid-template-columns: minmax(5.5rem, 1fr) minmax(1.5rem, 2fr) auto;
+}
+.wd-ledger > div {
+  grid-template-columns: 6rem minmax(0, 1fr) minmax(3rem, auto) minmax(4rem, auto);
+}
+@media (max-width: 620px) {
+  .wd-ledger > div {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+  .wd-top button,
+  .wd-tabs a,
+  .wd-body .wd-primary,
+  .wd-body summary {
+    min-height: 44px;
+    align-content: center;
+  }
+  .wd-customer,
+  .wd-split {
+    scroll-margin-top: 60px;
+  }
+  #evidence, #history, #drive-sync {
+    scroll-margin-top: 60px;
+  }
+}

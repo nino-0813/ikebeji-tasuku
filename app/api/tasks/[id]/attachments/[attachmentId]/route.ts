@@ -1,3 +1,6 @@
+import { dockAccess } from "@/lib/dock-access";
+import { getActiveWorkspaceId } from "@/lib/data";
+import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 
@@ -37,6 +40,9 @@ export async function GET(_request: Request, context: Context) {
 
 export async function DELETE(_request: Request, context: Context) {
   const { id, attachmentId } = await context.params;
+  if ((await getActiveWorkspaceId()) === WITH_DOCK_ID && !(await dockAccess())?.edit_operations) {
+    return NextResponse.json({ error: "添付ファイルを編集する権限がありません。" }, { status: 403 });
+  }
   const { data, error } = await findAttachment(id, attachmentId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "添付ファイルが見つかりません。" }, { status: 404 });

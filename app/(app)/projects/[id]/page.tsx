@@ -1,3 +1,8 @@
+import { dockAccess } from "@/lib/dock-access";
+import { saveProductionLinks, saveDockProject } from "@/lib/dock-actions";
+import { httpUrl, legacyProjectField } from "@/lib/dock-project";
+import { DockCustomerHistory } from "@/components/DockCustomerHistory";
+import { DockGate } from "@/components/DockGate";
 import { DockTaskLine } from "@/components/DockTaskLine";
 import { DockSteps } from "@/components/DockSteps";
 import { DockContract } from "@/components/DockContract";
@@ -42,11 +47,15 @@ export default async function ProjectPage({
   const overdue = open.filter((t) => daysUntil(t.due_date) < 0).length;
   const stalled = open.filter(isStalled).length;
 
-  const preview = project.detail
-    ?.split("\n")
-    .find((line) => line.startsWith("プレビュー："))
-    ?.slice(6);
-  if (project.workspace_id === WITH_DOCK_ID)
+  if (project.workspace_id === WITH_DOCK_ID) {
+    const access = await dockAccess();
+    if (!access) return <DockGate />;
+    const visibleTasks = [...open, ...done];
+    const links = [
+      ["website", "本番URL", project.client_website],
+      ["preview", "確認用URL", project.dock_preview_url ?? legacyProjectField(project.detail, "プレビュー")],
+      ["deployment", "最新版Vercel", project.dock_deployment_url],
+    ] as const;
     return (
       <section className="wd-stack">
         <div className="wd-tabs">
@@ -56,7 +65,7 @@ export default async function ProjectPage({
               ? "完了"
               : project.phase === "maintenance"
                 ? "伴走中"
-                : "制作中"}
+                : project.phase === "sales" ? "商談中" : "制作中"}
           </span>
           <span className="grow" />
           {project.dock_customer_id && (
@@ -69,51 +78,68 @@ export default async function ProjectPage({
           <section className="wd-panel">
             <header className="wd-title">
               <h2>{project.title}</h2>
-              <ProjectSettings project={project} goals={goals} />
+              {!project.archived && access.edit_operations && <details>
+                <summary>案件情報を編集</summary>
+                <form action={saveDockProject} className="mt-2 grid gap-2">
+                  <input type="hidden" name="project" value={id} />
+                  <label>案件名<input name="title" className="field" defaultValue={project.title} required /></label>
+                  <label>契約名義<input name="legal" className="field" defaultValue={project.client_name || ""} /></label>
+                  <label>状態<select name="phase" className="field" defaultValue={project.phase}>
+                    <option value="sales">商談中</option><option value="production">制作中</option><option value="maintenance">伴走中</option>
+                  </select></label>
+                  <label>完了予定日<input type="date" name="finish" className="field" defaultValue={project.dock_finish_on || legacyProjectField(project.detail, "完了予定日")} /></label>
+                  <fieldset><legend>担当メンバー</legend>
+                    {members.map(m => <label className="mr-3" key={m.id}><input type="checkbox" name="member" value={m.id} defaultChecked={project.dock_owner_ids?.includes(m.id) || legacyProjectField(project.detail, "担当")?.split("・").includes(m.name)} /> {m.name}</label>)}
+                  </fieldset>
+                  <label>案件メモ<textarea name="detail" className="field" defaultValue={project.detail || ""} /></label>
+                  <button className="wd-primary">案件情報を保存</button>
+                </form>
+              </details>}
             </header>
-            <div className="wd-note">
-              <b>いま何をしているか</b>
-              <p className="whitespace-pre-line">
-                {project.detail ||
-                  open[0]?.title ||
-                  "作業はまだ登録されていません。"}
-              </p>
-            </div>
-            <DockSteps id={id} archived={project.archived} />
+            <DockSteps project={project} members={members} canEdit={access.edit_operations} />
+            {project.detail && <details className="wd-note mt-3"><summary>案件メモ</summary><p className="whitespace-pre-wrap">{project.detail}</p></details>}
             <h2 className="wd-title mt-4">
               タスク
-              <AddTaskButton
-                label="＋ 追加"
-                defaults={{ project_id: id, category: project.category }}
-              />
+              {!project.archived && access.edit_operations && <AddTaskButton label="＋ 追加" defaults={{ project_id: id, category: project.category }} />}
             </h2>
-            {mine.map((t) => (
-              <DockTaskLine key={t.id} task={t} members={members} />
-            ))}
+            {visibleTasks.map(t => <DockTaskLine key={t.id} task={t} members={members} canEdit={access.edit_operations} />)}
+            {!visibleTasks.length && <p className="wd-empty">タスクはまだ登録されていません。</p>}
           </section>
           <aside className="wd-stack content-start">
             <DockContract
               id={id}
               customer={project.dock_customer_id}
               legal={project.client_name}
+              legacyAmounts={[
+                { label: "契約金額", value: Number(project.contract_amount) },
+                { label: "請求額", value: Number(project.invoiced_amount) },
+                { label: "入金済み金額", value: Number(project.paid_amount) },
+                { label: "月額保守", value: Number(project.maintenance_monthly_fee) },
+              ]}
             />
             <section className="wd-panel">
               <h2 className="wd-title">制作リンク</h2>
-              {preview?.match(/^https?:\/\//) && (
-                <a className="wd-row" href={preview}>
-                  プレビュー ↗
-                </a>
-              )}
-              {project.client_website?.match(/^https?:\/\//) ? (
-                <a href={project.client_website}>公開サイト ↗</a>
-              ) : (
-                <p>公開サイト未登録</p>
-              )}
+              {links.map(([key, label, value]) => {
+                const url = httpUrl(value);
+                return <p className="wd-row" key={key}>{label}{url ? <a className="underline" href={url} target="_blank" rel="noreferrer">開く ↗</a> : <small>未登録</small>}</p>;
+              })}
+              {access.edit_operations && <details className="mt-3">
+                <summary>制作リンクを編集</summary>
+                <form action={saveProductionLinks} className="mt-2 grid gap-2">
+                  <input type="hidden" name="project" value={id} />
+                  {links.map(([key, label, value]) => <label key={key}>{label}<input type="url" name={key} className="field" defaultValue={value || ""} /></label>)}
+                  <button className="wd-primary">制作リンクを保存</button>
+                </form>
+              </details>}
             </section>
+            {project.dock_customer_id && (
+              <section className="wd-panel"><DockCustomerHistory customer={project.dock_customer_id} /></section>
+            )}
           </aside>
         </div>
       </section>
     );
+  }
   return (
     <div className="space-y-7">
       <div>
@@ -176,14 +202,7 @@ export default async function ProjectPage({
         </div>
       </div>
 
-      {project.workspace_id === WITH_DOCK_ID ? (
-        <>
-          <DockContract id={project.id} customer={project.dock_customer_id} />
-          <DockSteps id={project.id} archived={project.archived} />
-        </>
-      ) : (
-        <ProjectDashboard project={project} tasks={mine} />
-      )}
+      <ProjectDashboard project={project} tasks={mine} />
 
       {goal && (
         <Link

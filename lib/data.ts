@@ -1,3 +1,4 @@
+import { dockMemberDisplay } from "./dock-members";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { isTeamPage } from "./board-pages";
@@ -45,6 +46,7 @@ export const getWorkspaceMembers = cache(async function getWorkspaceMembers(): P
   return (data ?? [])
     .map((membership) => relatedMember(membership.tm_members))
     .filter((member): member is Member => Boolean(member))
+    .map(member => workspaceId === WITH_DOCK_ID ? dockMemberDisplay(member) : member)
     .sort((a, b) => a.sort_order - b.sort_order);
 });
 

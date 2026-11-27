@@ -1,29 +1,38 @@
 import Link from "next/link";
 import { db } from "@/lib/supabase";
-import { dockTeamMember } from "@/lib/dock-team";
-import { addContract, addPayment, assignCustomer } from "@/lib/dock-actions";
+import { dockAccess } from "@/lib/dock-access";
+import { dockFinance } from "@/lib/dock-finance-data";
+import { paymentBalance } from "@/lib/dock-cash";
+import { dockToday } from "@/lib/dock-project";
+import { money } from "./DockCharts";
+import { addContract, addPayment, assignCustomer, saveRecurringRate, saveRecurringEnd } from "@/lib/dock-actions";
 import { DockGate } from "./DockGate";
 export async function DockContract({
   id,
   customer,
   legal,
+  legacyAmounts,
 }: {
   id: string;
   customer?: string | null;
   legal?: string | null;
+  legacyAmounts: { label: string; value: number }[];
 }) {
-  if (!(await dockTeamMember())) return <DockGate />;
-  const [customers, contracts] = await Promise.all([
+  const access = await dockAccess();
+  if (!access) return <DockGate />;
+  const [customers, contracts, finance] = await Promise.all([
     db.from("dock_customers").select("id,name").order("name"),
-    db
+    access.view_finance ? db
       .from("dock_contracts")
       .select(
-        "id,legal_name,kind,scope,free_support_terms,starts_on,ends_on,dock_payments(id,label,due_on,amount,received_on,received_amount)",
+        "id,legal_name,kind,scope,free_support_terms,starts_on,ends_on,dock_recurring_rates(effective_on,amount,day_of_month)",
       )
-      .eq("project_id", id),
+      .eq("project_id", id) : { data: [], error: null },
+    access.view_finance ? dockFinance(dockToday().slice(0, 7)) : null,
   ]);
   if (customers.error || contracts.error)
     throw new Error("顧客・契約の読み込みに失敗しました。");
+  const payments = finance?.payments.filter(p => p.project === id) ?? [];
   const project = <input type="hidden" name="project" value={id} />;
   return (
     <section className="card space-y-4 p-5">
@@ -41,9 +50,9 @@ export async function DockContract({
           顧客の背景・履歴を見る
         </Link>
       )}
-      <details open={!customer}>
+      {access.edit_operations && <details open={!customer}>
         <summary>顧客の紐付けを変更</summary>
-        <form action={assignCustomer} className="flex items-end gap-2">
+        <form action={assignCustomer} className="flex flex-wrap items-end gap-2">
           {project}
           <label>
             顧客
@@ -63,7 +72,7 @@ export async function DockContract({
           </label>
           <button>紐付けを保存</button>
         </form>
-      </details>
+      </details>}
       {contracts.data.map((c) => (
         <div key={c.id}>
           <strong>
@@ -73,29 +82,55 @@ export async function DockContract({
             提供範囲<b>{c.scope || "未登録"}</b>
           </p>
           {c.free_support_terms && <p>無償対応　{c.free_support_terms}</p>}
+          {(c.starts_on || c.ends_on) && <p>契約期間　{c.starts_on || "未登録"} ～ {c.ends_on || "未登録"}</p>}
+          {c.kind === "recurring" && (
+            <details className="mt-2">
+              <summary>月額の設定・履歴</summary>
+              {c.dock_recurring_rates.slice().sort((a, b) => b.effective_on.localeCompare(a.effective_on)).map(rate => (
+                <p className="wd-row" key={rate.effective_on}>{rate.effective_on}から
+                  <b>{rate.amount ? money(Number(rate.amount)) + " ／ 毎月" + rate.day_of_month + "日" : "停止"}</b>
+                </p>
+              ))}
+              {!c.dock_recurring_rates.length && <p className="wd-empty">月額は未設定です。</p>}
+              {access.edit_finance && (
+                <>
+                <form action={saveRecurringRate} className="grid gap-2 mt-2">
+                  {project}<input type="hidden" name="contract" value={c.id} />
+                  <label>適用日<input type="date" className="field" name="effective_on" required /></label>
+                  <label>月額（停止は0円）<input type="number" className="field" name="amount" min="0" required /></label>
+                  <label>毎月の予定日<input type="number" className="field" name="day_of_month" min="1" max="31" required defaultValue="1" /></label>
+                  <button className="wd-primary">月額を保存</button>
+                </form>
+                <form action={saveRecurringEnd} className="grid gap-2 mt-3">
+                  {project}<input type="hidden" name="contract" value={c.id} />
+                  <label>継続契約の終了日<input type="date" className="field" name="ends_on" defaultValue={c.ends_on || ""} min={c.starts_on || undefined} /></label>
+                  <button className="wd-primary">終了日を保存</button>
+                </form>
+                </>
+              )}
+            </details>
+          )}
         </div>
       ))}
-      <h3 className="wd-title">
-        お金の流れ<Link href="/cash">入金の詳細 →</Link>
-      </h3>
-      {contracts.data.flatMap((c) =>
-        (c.dock_payments || []).map((p) => (
-          <p className="wd-row" key={p.id}>
-            <span>
-              {p.label}
-              <small>{p.due_on} 予定</small>
-            </span>
-            <b>
-              ¥{Number(p.amount).toLocaleString()}
-              <small>{p.received_on ? "入金済" : "未入金"}</small>
-            </b>
-          </p>
-        )),
+      {access.view_finance && (
+        <>
+          <h3 className="wd-title">入金<Link href={"/cash?project=" + id + "#ledger"}>入金の詳細 →</Link></h3>
+          {payments.filter(p => paymentBalance(p).remaining > 0).slice(0, 3).map(p => (
+            <p className="wd-row" key={p.id}><span>{p.label}<small>{p.due_on} 予定</small></span>
+              <b>残額 {money(paymentBalance(p).remaining)}</b>
+            </p>
+          ))}
+          {!payments.some(p => paymentBalance(p).remaining > 0) && <p>残額のある入金予定はありません。</p>}
+          {legacyAmounts.some(amount => amount.value > 0) && (
+            <details className="wd-note mt-2">
+              <summary>以前の金額欄を確認</summary>
+              <p className="text-sm">入金集計には契約ごとの入金記録を使います。以前の金額は照合用に表示しています。</p>
+              {legacyAmounts.filter(amount => amount.value > 0).map(amount => <p className="wd-row" key={amount.label}>{amount.label}<b>{money(amount.value)}</b></p>)}
+            </details>
+          )}
+        </>
       )}
-      {!contracts.data.some((c) => c.dock_payments?.length) && (
-        <p>入金予定は未登録です。</p>
-      )}
-      <details>
+      {access.edit_finance && <details>
         <summary>契約を追加</summary>
         <form action={addContract} className="mt-2 grid gap-2 sm:grid-cols-2">
           {project}
@@ -129,8 +164,8 @@ export async function DockContract({
           </label>
           <button className="text-brand">契約を保存</button>
         </form>
-      </details>
-      {!!contracts.data.length && (
+      </details>}
+      {access.edit_finance && !!contracts.data.length && (
         <details>
           <summary>入金予定を追加</summary>
           <form action={addPayment} className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -173,7 +208,7 @@ export async function DockContract({
               確度
               <select name="certainty" className="field">
                 <option value="confirmed">確定</option>
-                <option value="estimated">想定</option>
+                <option value="estimated">契約済み・日程調整中</option>
               </select>
             </label>
             <button className="text-brand">予定を保存</button>

@@ -1,4 +1,5 @@
-import { DockTaskLine } from "@/components/DockTaskLine";
+import { dockAccess } from "@/lib/dock-access";
+import { legacyProjectField } from "@/lib/dock-project";
 import { db } from "@/lib/supabase";
 import { dockDeadline } from "@/lib/dock-deadline";
 import Link from "next/link";
@@ -19,29 +20,30 @@ export default async function ProjectsPage({
   searchParams,
 }: PageProps<"/projects">) {
   if ((await getActiveWorkspaceId()) === "00000000-0000-4000-8000-000000000005") {
-    const tab = String((await searchParams).tab || "active");
+    const access = await dockAccess();
+    if (!access) return null;
+    const query = await searchParams;
+    const tab = ["production", "maintenance", "archive"].includes(String(query.tab)) ? String(query.tab) : "active";
+    const filter = query.filter === "unlinked" || query.filter === "no-steps" ? query.filter : null;
     const [all, tasks, members, steps, customers] = await Promise.all([
       getAllProjects(),
       getTasks(),
       getWorkspaceMembers(),
       db
         .from("dock_steps")
-        .select("project_id,title,position,completed_on,due_on")
-        .order("position"),
+        .select("id,project_id,title,position,completed_on,due_on,owner_id")
+        .order("position").order("id"),
       db.from("dock_customers").select("id,name"),
     ]);
     if (steps.error || customers.error)
       throw new Error("案件の工程を取得できませんでした。");
-    const filtered = all.filter((p) =>
-      tab === "archive"
-        ? p.archived
-        : !p.archived &&
-          (tab === "sales"
-            ? p.phase === "sales"
-            : tab === "active"
-              ? p.phase !== "sales"
-              : p.phase === tab),
-    );
+    const filtered = all.filter(p => {
+      if (tab === "archive") return p.archived;
+      if (p.archived || p.phase === "sales" || (tab !== "active" && tab !== p.phase)) return false;
+      if (filter === "unlinked") return !p.dock_customer_id;
+      if (filter === "no-steps") return !steps.data.some(s => s.project_id === p.id);
+      return true;
+    });
     return (
       <section className="wd-stack">
         <nav className="wd-tabs">
@@ -50,9 +52,7 @@ export default async function ProjectsPage({
             production: "制作中",
             maintenance: "伴走中",
             archive: "完了・アーカイブ",
-            ...(all.some((p) => p.phase === "sales")
-              ? { sales: "既存の商談" }
-              : {}),
+
           }).map(([key, label]) => (
             <Link
               aria-current={key === tab ? "page" : undefined}
@@ -63,19 +63,22 @@ export default async function ProjectsPage({
             </Link>
           ))}
           <span className="grow" />
-          <Link href="/projects/new" className="wd-primary">
-            ＋ プロジェクトを追加
-          </Link>
+          <Link href="/customers?stage=negotiation">商談中の顧客 →</Link>
+          {access.edit_operations && <Link href="/projects/new" className="wd-primary">＋ プロジェクトを追加</Link>}
         </nav>
+        {filter && <div className="wd-note">{filter === "unlinked" ? "顧客未紐づけ" : "工程未登録"}の案件 <Link className="underline" href="/projects">フィルターを解除</Link></div>}
         <div className="wd-three">
           {filtered.map((p) => {
             const mine = tasks.filter((t) => t.project_id === p.id),
               stages = steps.data.filter((s) => s.project_id === p.id),
-              current = stages.find((s) => !s.completed_on);
+              unfinished = stages.filter(s => !s.completed_on),
+              [current, following] = unfinished;
+            const owners = members.filter(m => p.dock_owner_ids?.includes(m.id) || current?.owner_id === m.id)
+              .map(m => m.name).join(" / ");
             const next = mine
               .filter((t) => t.status !== "done")
               .sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
-            const date = [next?.due_date, current?.due_on]
+            const date = [next?.due_date, current?.due_on, p.dock_finish_on || legacyProjectField(p.detail, "完了予定日")]
                 .filter(Boolean)
                 .sort()[0],
               risk = !p.archived && date ? dockDeadline(date) : null;
@@ -97,10 +100,7 @@ export default async function ProjectsPage({
                           ? "商談中"
                           : "制作中"}
                   </small>
-                  <small>
-                    工程 {stages.filter((s) => s.completed_on).length}/
-                    {stages.length}
-                  </small>
+                  <small>{p.archived ? p.dock_archived_on || "終了日未登録" : risk?.label}</small>
                 </div>
                 <h2 className="my-3 text-lg font-bold">
                   <Link href={"/projects/" + p.id}>{p.title} →</Link>
@@ -112,23 +112,14 @@ export default async function ProjectsPage({
                     p.client_name ||
                     "未登録"}
                 </p>
-                <p>現在　{current?.title || next?.title || "未設定"}</p>
-                <p>
-                  担当　
-                  {p.detail
-                    ?.split("\n")
-                    .find((line) => line.startsWith("担当："))
-                    ?.slice(3) ||
-                    members
-                      .filter((m) => mine.some((t) => t.owner_id === m.id))
-                      .map((m) => m.name)
-                      .join(" / ") ||
-                    "未設定"}
-                </p>
-                <small>{risk?.label}</small>
-                {mine.slice(0, 3).map((t) => (
-                  <DockTaskLine key={t.id} task={t} members={members} />
-                ))}
+                {!p.archived ? (
+                  <>
+                    <p>現在の工程　{current?.title || (stages.length ? "全工程完了" : "工程未登録")}</p>
+                    <p>次の工程　{following?.title || "—"}</p>
+                    <p>担当　{owners || legacyProjectField(p.detail, "担当") ||
+                      members.filter(m => m.id === next?.owner_id).map(m => m.name).join("") || "未設定"}</p>
+                  </>
+                ) : <p>{p.dock_archive_reason || "終了理由未登録"}</p>}
               </article>
             );
           })}

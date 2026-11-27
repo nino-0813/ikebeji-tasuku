@@ -2,206 +2,118 @@ import { OutlookChart, money } from "@/components/DockCharts";
 import { receivePayment, saveTarget } from "@/lib/dock-actions";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { dockTeamMember } from "@/lib/dock-team";
-import { db } from "@/lib/supabase";
+import { dockAccess } from "@/lib/dock-access";
+import { DockGate } from "@/components/DockGate";
 import { getActiveWorkspaceId } from "@/lib/data";
 import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
-import { cashOutlook, type FeeKind } from "@/lib/dock-cash";
+import { cashOutlook, paymentBalance } from "@/lib/dock-cash";
+import { dockFinance } from "@/lib/dock-finance-data";
+import { dockToday } from "@/lib/dock-project";
 
-const yen = new Intl.NumberFormat("ja-JP", {
-  style: "currency",
-  currency: "JPY",
-});
 export default async function CashPage({ searchParams }: PageProps<"/cash">) {
   if ((await getActiveWorkspaceId()) !== WITH_DOCK_ID) notFound();
-  if (!(await dockTeamMember()))
-    return (
-      <section>
-        <h1>目標・入金</h1>
-        <p>メールアドレスとパスワードでログインしてください。</p>
-      </section>
-    );
+  const access = await dockAccess();
+  if (!access) return <DockGate />;
+  if (!access.view_finance) return <p className="wd-panel">入金情報を閲覧する権限はありません。</p>;
   const query = await searchParams;
-  const kind =
-    query.kind === "one_off" || query.kind === "recurring"
-      ? query.kind
-      : undefined;
-  const month = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-  }).format(new Date());
-  const last = cashOutlook(month, [], []).at(-1)!.month;
-  const end = new Date(
-    Date.UTC(Number(last.slice(0, 4)), Number(last.slice(5)), 1),
-  )
-    .toISOString()
-    .slice(0, 10);
-  const start = month + "-01";
-  const [targets, payments] = await Promise.all([
-    db
-      .from("dock_monthly_targets")
-      .select("month,kind,amount")
-      .gte("month", start)
-      .lt("month", end),
-    db
-      .from("dock_payments")
-      .select(
-        "id,label,amount,due_on,received_amount,received_on,certainty,dock_contracts!inner(kind,legal_name)",
-      )
-      .or(`due_on.gte.${start},received_on.gte.${start},received_on.is.null`)
-      .order("due_on"),
-  ]);
-  if (targets.error || payments.error)
-    throw new Error("入金情報を取得できませんでした。");
-  const rows = payments.data.map((p) => {
-    const c = Array.isArray(p.dock_contracts)
-      ? p.dock_contracts[0]
-      : p.dock_contracts;
-    return { ...p, kind: c.kind as FeeKind, customer: c.legal_name };
-  });
-  const outlook = cashOutlook(month, targets.data, rows, kind);
+  const kind = query.kind === "one_off" || query.kind === "recurring" ? query.kind : undefined;
+  const project = typeof query.project === "string" ? query.project : undefined;
+  const today = dockToday();
+  const month = today.slice(0, 7);
+  const { targets, payments, sales } = await dockFinance(month);
+  const outlook = cashOutlook(month, targets, payments, sales, kind);
   const current = outlook[0];
+  const rows = payments.filter(p => (!kind || kind === p.kind) && (!project || p.project === project));
+  const metrics = [
+    ["今月の目標", current.target], ["今月の実入金", current.received],
+    ["契約済み予定の残額", current.committed],
+    ...(!kind ? [["商談予測", current.sales] as const] : []),
+  ] as const;
   return (
     <section className="wd-stack">
-      <h1 className="text-xl font-bold">目標・入金</h1>
       <div className="wd-toolbar">
-        <nav className="wd-tabs">
+        <nav className="wd-tabs" aria-label="入金の区分">
           {[
-            ["", "入金ベース"],
-            ["one_off", "単発制作費"],
-            ["recurring", "継続支援費"],
-          ].map(([key, label]) => (
-            <Link
-              key={label}
-              aria-current={(kind || "") === key ? "page" : undefined}
-              href={key ? "/cash?kind=" + key : "/cash"}
-            >
-              {label}
-            </Link>
-          ))}
+            ["", "すべて"], ["one_off", "単発制作費"], ["recurring", "継続支援費"],
+          ].map(([key, label]) => {
+            const params = new URLSearchParams();
+            if (key) params.set("kind", key);
+            if (project) params.set("project", project);
+            return <Link key={label} aria-current={(kind || "") === key ? "page" : undefined} href={"/cash?" + params}>{label}</Link>;
+          })}
         </nav>
-        <details className="wd-edit">
-          <summary className="wd-primary">月別目標を編集</summary>
-          <form action={saveTarget} className="mt-3 grid gap-3 sm:grid-cols-4">
-            <label>
-              対象月
-              <input
-                required
-                className="field"
-                type="month"
-                name="month"
-                defaultValue={month}
-              />
-            </label>
-            <label>
-              区分
-              <select name="kind" className="field">
-                <option value="one_off">単発制作費</option>
-                <option value="recurring">継続支援費</option>
-              </select>
-            </label>
-            <label>
-              目標額（円）
-              <input
-                required
-                className="field"
-                name="amount"
-                type="number"
-                min="0"
-                step="1"
-              />
-            </label>
-            <button>目標を保存</button>
-          </form>
-        </details>
+        {access.edit_finance && (
+          <details className="wd-edit">
+            <summary className="wd-primary">月別目標を編集</summary>
+            <form action={saveTarget} className="mt-3 grid gap-3 sm:grid-cols-4">
+              <label>対象月<input required className="field" type="month" name="month" defaultValue={month} /></label>
+              <label>区分<select name="kind" className="field" defaultValue={kind}>
+                <option value="one_off">単発制作費</option><option value="recurring">継続支援費</option>
+              </select></label>
+              <label>目標額（円）<input required className="field" name="amount" type="number" min="0" step="1" /></label>
+              <button className="wd-primary">目標を保存</button>
+            </form>
+          </details>
+        )}
       </div>
-      <div className="wd-three">
-        {[
-          ["今月の目標", money(current.target)],
-          ["今月の実入金", money(current.received)],
-          ["今月の入金見込み", money(current.forecast)],
-        ].map(([label, value]) => (
-          <div key={label} className="wd-panel wd-stat">
-            <span>{label}</span>
-            <strong>{value}</strong>
-            <small>
-              {label === "今月の目標"
-                ? kind === "recurring"
-                  ? "継続支援費"
-                  : kind === "one_off"
-                    ? "単発制作費"
-                    : "単発制作費 ＋ 継続支援費"
-                : label === "今月の実入金"
-                  ? "入金済みを計上"
-                  : "確定・想定を含む"}
-            </small>
-          </div>
+      <div className="wd-four">
+        {metrics.map(([label, value]) => (
+          <div key={label} className="wd-panel wd-stat"><span>{label}</span><strong>{money(value)}</strong></div>
         ))}
       </div>
       <OutlookChart rows={outlook} />
-      <section className="wd-panel">
-        <h2 className="wd-title">入金予定の内訳</h2>
-        {rows
-          .filter((r) => !kind || r.kind === kind)
-          .map((r) => (
-            <div key={r.id} className="wd-ledger">
+      {!kind && (
+        <section className="wd-panel">
+          <h2 className="wd-title">商談予測</h2>
+          {sales.map(row => (
+            <Link className="wd-row" key={row.id} href={"/customers?id=" + row.id}>
+              <span>{row.name}<small>{row.month.slice(0, 7)} ｜ 確度 {({ low: "低", medium: "中", high: "高" } as Record<string, string>)[row.confidence]}</small></span>
+              <strong>{money(row.amount)} →</strong>
+            </Link>
+          ))}
+          {!sales.length && <p className="wd-empty">対象期間の商談予測はありません。</p>}
+        </section>
+      )}
+      <section className="wd-panel" id="ledger">
+        <h2 className="wd-title">入金予定・実入金の内訳 {project && <Link href="/cash#ledger">全案件を表示 →</Link>}</h2>
+        {rows.map(row => {
+          const balance = paymentBalance(row);
+          return (
+            <article key={row.id} className="wd-ledger">
               <div>
-                <small>{r.due_on}</small>
-                <strong>
-                  {r.customer}｜{r.label}
-                </strong>
-                <small>{r.kind === "one_off" ? "単発" : "継続"}</small>
-                <b>
-                  {yen.format(
-                    r.received_on ? r.received_amount || 0 : r.amount,
-                  )}
-                </b>
-                <span>
-                  {r.received_on
-                    ? "入金済"
-                    : r.certainty === "confirmed"
-                      ? "確定予定"
-                      : "想定"}
-                </span>
+                <small>{row.due_on}</small>
+                <Link className="font-bold underline" href={"/projects/" + row.project}>{row.customer}｜{row.label}</Link>
+                <small>{row.kind === "one_off" ? "単発" : "継続"}{row.certainty === "estimated" ? "・日程調整中" : ""}</small>
+                <strong>{balance.remaining === 0 ? "入金済み" : balance.received ? "一部入金" : "未入金"}</strong>
               </div>
-              {!r.received_on && (
-                <details>
+              <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+                {[["予定", row.amount], ["実入金", balance.received], ["残額", balance.remaining]].map(([label, amount]) => (
+                  <div key={label}><dt>{label}</dt><dd className="font-semibold">{money(Number(amount))}</dd></div>
+                ))}
+              </dl>
+              {!!row.receipts.length && (
+                <ul className="mt-2 text-sm">
+                  {row.receipts.map((receipt, index) => <li key={index}>{receipt.received_on}　{money(receipt.amount)}</li>)}
+                </ul>
+              )}
+              {access.edit_finance && balance.remaining > 0 && (
+                <details className="mt-2">
                   <summary>入金を記録</summary>
-                  <form
-                    action={receivePayment}
-                    className="flex flex-wrap items-end gap-2"
-                  >
-                    <input type="hidden" name="payment" value={r.id} />
-                    <label>
-                      実入金日
-                      <input
-                        className="field"
-                        type="date"
-                        name="received_on"
-                        required
-                      />
-                    </label>
-                    <label>
-                      実入金額（円）
-                      <input
-                        className="field"
-                        type="number"
-                        min="1"
-                        name="received_amount"
-                        required
-                        defaultValue={r.amount}
-                      />
-                    </label>
-                    <button>記録する</button>
+                  <form action={receivePayment} className="flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="request" value={crypto.randomUUID()} />
+                    {row.period ? (
+                      <><input type="hidden" name="contract" value={row.contract} /><input type="hidden" name="period" value={row.period} /></>
+                    ) : <input type="hidden" name="payment" value={row.id} />}
+                    <label>実入金日<input type="date" className="field" name="received_on" required max={today} defaultValue={today} /></label>
+                    <label>実入金額（円）<input type="number" className="field" name="received_amount" min="1" max={balance.remaining} required defaultValue={balance.remaining} /></label>
+                    <button className="wd-primary">記録する</button>
                   </form>
                 </details>
               )}
-            </div>
-          ))}
-        {!rows.some((r) => !kind || r.kind === kind) && (
-          <p className="wd-empty">この期間の入金予定はありません。</p>
-        )}
+            </article>
+          );
+        })}
+        {!rows.length && <p className="wd-empty">入金の記録はありません。</p>}
       </section>
     </section>
   );
