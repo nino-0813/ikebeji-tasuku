@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import identities from "./dock-invitations.json";
 import { db } from "./supabase";
 import { WITH_DOCK_ID } from "./meeting-inbox";
+import { authTemporarilyUnavailable } from "./dock-session";
 
 export const TEAM_COOKIE = "dock_personal";
 const entries = Object.entries(identities);
@@ -13,15 +14,23 @@ export function invitation(code: string) {
 }
 
 export async function teamIdentity(token: string | undefined) {
-  if (!token) return null;
+  return (await teamIdentityStatus(token)).member;
+}
+
+export async function teamIdentityStatus(token: string | undefined) {
+  if (!token) return { member: null, unavailable: false };
   const [auth, membership] = await Promise.all([
     db.auth.getUser(token),
     db.from("tm_workspace_members").select("member_id").eq("workspace_id", WITH_DOCK_ID),
   ]);
   const user = auth.data.user;
-  if (auth.error || !user || membership.error) return null;
-  const member = entries.find(([, identity]) => identity.id === user.id)?.[0];
-  return member && membership.data.some(row => row.member_id === member) ? member : null;
+  if (authTemporarilyUnavailable(auth.error) || (!auth.error && membership.error)) {
+    return { member: null, unavailable: true };
+  }
+  if (auth.error || !user || membership.error) return { member: null, unavailable: false };
+  const match = entries.find(([, identity]) => identity.id === user.id)?.[0];
+  const member = match && membership.data.some(row => row.member_id === match) ? match : null;
+  return { member, unavailable: false };
 }
 
 export async function canOpenWorkspace(member: string, id: string) {

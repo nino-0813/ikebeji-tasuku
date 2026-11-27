@@ -9,6 +9,7 @@ import { getActiveWorkspaceId, ME_COOKIE, WORKSPACE_COOKIE } from "./data";
 
 import { TEAM_COOKIE, canOpenWorkspace } from "./dock-identity";
 import { dockTeamMember, signedInMember } from "./dock-team";
+import { TEAM_REFRESH_COOKIE } from "./dock-session";
 
 import type { Category, Horizon, Priority, ProjectPhase, Status } from "./types";
 
@@ -40,7 +41,9 @@ async function checkTaskLinks(input: Partial<TaskInput>) {
 
 export async function signOut() {
   const store = await cookies();
-  for (const key of [TEAM_COOKIE, WORKSPACE_COOKIE, ME_COOKIE, "tm_auth"]) store.delete(key);
+  const accessToken = store.get(TEAM_COOKIE)?.value;
+  if (accessToken) await db.auth.admin.signOut(accessToken, "local");
+  for (const key of [TEAM_COOKIE, TEAM_REFRESH_COOKIE, WORKSPACE_COOKIE, ME_COOKIE, "tm_auth"]) store.delete(key);
   redirect("/login");
 }
 

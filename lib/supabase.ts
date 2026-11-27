@@ -4,17 +4,19 @@ export class SetupError extends Error {}
 
 let client: SupabaseClient | null = null;
 
-function init(): SupabaseClient {
-  if (client) return client;
+export function createSupabaseClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
     throw new SetupError("SUPABASE_ENV_MISSING");
   }
-  client = createClient(url, serviceKey, {
+  return createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  return client;
+}
+
+function init(): SupabaseClient {
+  return client ??= createSupabaseClient();
 }
 
 export function isConfigured(): boolean {

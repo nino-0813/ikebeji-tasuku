@@ -1,14 +1,14 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/supabase";
+import { createSupabaseClient, db } from "@/lib/supabase";
 import { invitation, TEAM_COOKIE, teamIdentity } from "@/lib/dock-identity";
 import { ME_COOKIE, WORKSPACE_COOKIE } from "@/lib/data";
 import { WITH_DOCK_ID } from "@/lib/meeting-inbox";
 import { DEFAULT_WORKSPACE_ID } from "@/lib/data";
 import { isTeamPage } from "@/lib/board-pages";
+import { REMEMBER_SESSION_SECONDS, TEAM_REFRESH_COOKIE, teamCookieOptions } from "@/lib/dock-session";
 
 export async function personalLogin(_previous: string | null, form: FormData): Promise<string | null> {
   const code = String(form.get("invite") || "");
@@ -27,20 +27,27 @@ export async function personalLogin(_previous: string | null, form: FormData): P
     if (error) return "登録できませんでした。登録済みの場合はログインしてください。";
   }
   // signInWithPassword changes the client session. Never use the shared admin client here.
-  const client = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
+  const client = createSupabaseClient();
   const { data, error } = await client.auth.signInWithPassword({ email, password });
   const session = data.session;
   if (error || !session) return "メールアドレスまたはパスワードを確認してください。";
   const member = await teamIdentity(session.access_token);
   if (!member) return "このアカウントではウィズドックを開けません。";
   const store = await cookies();
-  const options = { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/" };
+  const remember = form.get("remember") === "yes";
   store.delete("tm_auth");
-  store.set(TEAM_COOKIE, session.access_token, { ...options, maxAge: session.expires_in });
+  store.set(TEAM_COOKIE, session.access_token, remember
+    ? { ...teamCookieOptions, maxAge: session.expires_in }
+    : teamCookieOptions);
+  if (remember) {
+    store.set(TEAM_REFRESH_COOKIE, session.refresh_token, { ...teamCookieOptions, maxAge: REMEMBER_SESSION_SECONDS });
+  } else {
+    store.delete(TEAM_REFRESH_COOKIE);
+  }
   const target = String(form.get("workspace") || store.get(WORKSPACE_COOKIE)?.value || DEFAULT_WORKSPACE_ID);
-  store.set(WORKSPACE_COOKIE, isTeamPage(target) ? target : DEFAULT_WORKSPACE_ID, options);
-  store.set(ME_COOKIE, member, options);
+  store.set(WORKSPACE_COOKIE, isTeamPage(target) ? target : DEFAULT_WORKSPACE_ID, remember
+    ? { ...teamCookieOptions, maxAge: REMEMBER_SESSION_SECONDS }
+    : teamCookieOptions);
+  store.set(ME_COOKIE, member, teamCookieOptions);
   redirect("/");
 }
